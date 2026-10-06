@@ -1,0 +1,168 @@
+@import "tailwindcss";
+@config "../../tailwind.config.ts";
+@import "leaflet/dist/leaflet.css";
+
+:root {
+  --y: #FFC20E;
+  --y2: #FFE08A;
+  --y3: #FFF6D6;
+  --ink: #26231B;
+  --mut: #6F6A5A;
+  --bg: #F8F7F2;
+  --card: #FFFFFF;
+  --line: #E7E2D0;
+  --ok: #1E9E5A;
+
+  /* Tailwind base variable bindings */
+  --background: var(--bg);
+  --foreground: var(--ink);
+  color-scheme: light;
+}
+
+:root[data-theme="light"],
+:root[data-theme="dark"] {
+  --bg: #F8F7F2;
+  --card: #FFFFFF;
+  --ink: #26231B;
+  --mut: #6F6A5A;
+  --line: #E7E2D0;
+  --y3: #FFF6D6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-padding-top: env(safe-area-inset-top, 0px);
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-plus-jakarta), var(--font-noto-sinhala), system-ui, sans-serif;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* Animations */
+@keyframes pu {
+  50% {
+    box-shadow: 0 0 0 6px rgba(30, 158, 90, 0.25);
+  }
+}
+
+@keyframes pu2 {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+.animate-pu {
+  animation: pu 1.6s infinite;
+}
+
+.animate-pu2 {
+  animation: pu2 2s infinite;
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pu,
+  .animate-pu2,
+  .live-dot,
+  .pin-pulse {
+    animation: none !important;
+  }
+  .slide-transition,
+  .drawer-transition {
+    transition: none !important;
+  }
+}
+
+/* Focus styles meeting WCAG AA */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--mut);
+}
+
+/* Leaflet Custom Styling to seamlessly blend with brand */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  background-color: var(--y3) !important;
+  font-family: inherit;
+}
+
+.leaflet-control-attribution {
+  font-size: 10px !important;
+  background: rgba(255, 255, 255, 0.7) !important;
+  color: var(--mut) !important;
+}
+
+[data-theme="dark"] .leaflet-tile {
+  filter: brightness(0.75) invert(1) contrast(1.2) hue-rotate(180deg) saturate(0.6);
+}
+
+/* Custom Lorry Pin on Map */
+.custom-lorry-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.lorry-marker-ring {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--y);
+  opacity: 0.5;
+  animation: pu2 2s infinite;
+}
+
+.lorry-marker-core {
+  position: relative;
+  z-index: 2;
+  width: 22px;
+  height: 22px;
+  background: #26231B;
+  border: 2.5px solid var(--y);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--y);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  transition: transform 0.2s ease;
+}
+
+.custom-lorry-pin:hover .lorry-marker-core {
+  transform: scale(1.2);
+}

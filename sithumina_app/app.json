@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "sithumina driver",
+    "slug": "sithumina-driver",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFC20E"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Sithumina Driver needs your GPS location to track your lorry on the live transport map.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Sithumina Driver needs continuous GPS tracking to update live trip routes on the web map."
+      }
+    },
+    "android": {
+      "package": "com.sithumina.driver",
+      "adaptiveIcon": {
+        "backgroundColor": "#FFC20E",
+        "foregroundImage": "./assets/icon.png"
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION"
+      ],
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

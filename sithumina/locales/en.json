@@ -1,0 +1,91 @@
+{
+  "brandName": "Sithumina Transport",
+  "logoText": "Logo",
+  "nav": {
+    "home": "Home",
+    "about": "About us",
+    "find": "Find empty lorry",
+    "book": "Book individual vehicle",
+    "reg": "Register vehicle",
+    "qa": "Q&A",
+    "contact": "Contact details",
+    "reviews": "Reviews",
+    "manage": "Dispatch Hub"
+  },
+  "login": "Login",
+  "desc": "Track every Sithumina lorry live on the map of Sri Lanka. Find an empty lorry near you or book a vehicle just for your load.",
+  "mobilePara": "Track lorries live, island-wide",
+  "chips": [
+    "📍 Live tracking",
+    "🚚 Empty lorries",
+    "📦 Book a vehicle"
+  ],
+  "buttons": {
+    "findEmpty": "Find empty lorry",
+    "bookVehicle": "Book individual vehicle"
+  },
+  "map": {
+    "liveCount": "Live · 24 lorries on the road",
+    "mobileLive": "24 live",
+    "gps": "My location",
+    "gpsShort": "GPS",
+    "nearbyTitle": "Nearby lorries",
+    "status": {
+      "empty": "Empty",
+      "onTrip": "On trip"
+    },
+    "ariaLabel": "Sri Lanka live map"
+  },
+  "slides": [
+    {
+      "title": "Lorries you can see, live",
+      "subtitle": "Follow your load from pickup to delivery.",
+      "emoji": "🚚",
+      "bg": "#FFC20E"
+    },
+    {
+      "title": "Empty lorry nearby?",
+      "subtitle": "Find one on the map in seconds.",
+      "emoji": "📍",
+      "bg": "#FFD54A"
+    },
+    {
+      "title": "Own a lorry?",
+      "subtitle": "Register your vehicle and get more trips.",
+      "emoji": "🚛",
+      "bg": "#FFE08A"
+    }
+  ],
+  "social": {
+    "facebook": "Facebook",
+    "whatsapp": "WhatsApp",
+    "youtube": "YouTube",
+    "tiktok": "TikTok"
+  },
+  "menu": "Menu",
+  "close": "Close",
+  "footer": {
+    "ariaLabel": "Site footer",
+    "shortDescription": "Live lorry tracking and reliable goods transport across Sri Lanka.",
+    "quickLinksHeading": "Quick links",
+    "contactHeading": "Contact",
+    "getAppHeading": "Get the app",
+    "getAppSubtitle": "Track your lorries from your phone",
+    "comingSoon": "Coming soon",
+    "officeAddress": "Head office",
+    "operatingHours": "Opening hours",
+    "hoursText": "Mon–Sat, 8:00 am – 6:00 pm",
+    "copyright": "All rights reserved.",
+    "privacyPolicy": "Privacy policy",
+    "termsOfService": "Terms of service",
+    "officeLocationHeading": "Office location",
+    "officeHubTitle": "Peliyagoda Logistics Hub",
+    "getDirections": "Get directions",
+    "viewOnGoogleMaps": "Google Maps",
+    "openStatus": "Open · Mon–Sat 8:00 am – 6:00 pm",
+    "liveLocationHeading": "Live fleet tracking",
+    "liveLorriesCount": "24 lorries live on road",
+    "viewLiveMap": "Open live map",
+    "viewOfficeMap": "View on Google Maps"
+  }
+}

@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+*/node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Next.js
+.next/
+*/.next/
+**/.next/
+out/
+*/out/
+build/
+*/build/
+
+# Expo / React Native
+.expo/
+*/.expo/
+**/.expo/
+web-build/
+*/web-build/
+
+# Environment files
+.env*
+*/.env*
+**/.env*
+!.env.example
+!*/.env.example
+!**/.env.example
+
+# Typescript
+*.tsbuildinfo
+*/tsconfig.tsbuildinfo
+next-env.d.ts
+*/next-env.d.ts
+
+# Misc
+.DS_Store
+*.pem
+.vercel
+*/.vercel
