@@ -18,11 +18,13 @@ import {
   DriverRecord,
   getAllLorries,
   LorryRecord,
+  subscribeAdminLorries,
   addNewLorryToFleet,
   deleteLorryFromFleet,
   updateLorryTripStatus,
   getAllBookings,
   BookingRecord,
+  subscribeAdminBookings,
   updateBookingDispatch,
   getAllCustomers,
   CustomerRecord,
@@ -35,6 +37,7 @@ import {
   getAllReviews,
   ReviewRecord,
 } from "../services/database";
+import { recommendBestLorriesForBooking } from "../services/dispatchEngine";
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -86,6 +89,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<BookingRecord | null>(null);
 
+  // Live GPS Map Inspector Modal
+  const [gpsModalVisible, setGpsModalVisible] = useState(false);
+  const [selectedGpsLorry, setSelectedGpsLorry] = useState<LorryRecord | null>(null);
+
   const loadAllData = useCallback(async () => {
     setLoading(true);
     try {
@@ -113,9 +120,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   }, []);
 
   useEffect(() => {
+    // Initial fetch of all administrative tables
     loadAllData();
-    const interval = setInterval(loadAllData, 4000);
-    return () => clearInterval(interval);
+
+    // 1. Direct real-time listener for driver GPS broadcasts
+    const unsubscribeLorries = subscribeAdminLorries((liveLorries) => {
+      setLorries(liveLorries);
+    });
+
+    // 2. Direct real-time listener for customer bookings submitted on the web
+    const unsubscribeBookings = subscribeAdminBookings((liveBookings) => {
+      setBookings(liveBookings);
+    });
+
+    // Periodic check for other administrative collections (every 15 seconds)
+    const interval = setInterval(loadAllData, 15000);
+
+    return () => {
+      unsubscribeLorries();
+      unsubscribeBookings();
+      clearInterval(interval);
+    };
   }, [loadAllData]);
 
   // Handle Driver Registration
@@ -165,21 +190,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     loadAllData();
   };
 
-  // Assign Driver to Booking
-  const handleAssignDriverToBooking = async (driver: DriverRecord) => {
+  // Assign Driver / Lorry to Booking
+  const handleAssignDriverToBooking = async (driverOrLorry: {
+    lorryId?: string;
+    id?: string;
+    name?: string;
+    driverName?: string;
+    phone?: string;
+    plate: string;
+  }) => {
     if (!selectedBooking) return;
+    const lorryId = driverOrLorry.lorryId || driverOrLorry.id || `lorry-${driverOrLorry.plate.toLowerCase()}`;
+    const driverName = driverOrLorry.driverName || driverOrLorry.name || "Fleet Driver";
+    const driverPhone = driverOrLorry.phone || "";
+
     await updateBookingDispatch({
       id: selectedBooking.id,
       status: "assigned",
-      assignedLorryId: driver.lorryId,
-      assignedDriverName: driver.name,
-      assignedDriverPhone: driver.phone,
-      assignedPlate: driver.plate,
+      assignedLorryId: lorryId,
+      assignedDriverName: driverName,
+      assignedDriverPhone: driverPhone,
+      assignedPlate: driverOrLorry.plate,
     });
     setAssignModalVisible(false);
     setSelectedBooking(null);
     loadAllData();
-    Alert.alert("Vehicle Assigned", `Driver ${driver.name} (${driver.plate}) assigned to booking ${selectedBooking.id}!`);
+    Alert.alert(
+      "Vehicle Dispatched! 🚚",
+      `Driver ${driverName} (${driverOrLorry.plate}) has been assigned to booking ${selectedBooking.id}!`
+    );
   };
 
   return (
@@ -290,11 +329,137 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
             <View style={styles.sectionHeaderRow}>
               <View>
                 <Text style={styles.sectionTitle}>Active Fleet & Live GPS Tracking</Text>
-                <Text style={styles.sectionDesc}>Real-time telemetry broadcasted from mobile driver devices</Text>
+                <Text style={styles.sectionDesc}>Real-time telemetry broadcasted live from driver mobile devices</Text>
               </View>
               <TouchableOpacity onPress={() => setLorryModalVisible(true)} style={styles.actionBtnYellow}>
                 <Text style={styles.actionBtnYellowText}>+ Add Vehicle</Text>
               </TouchableOpacity>
+            </View>
+
+            {/* LIVE TELEMETRY STATS BANNER */}
+            <View style={styles.radarStatsRow}>
+              <View style={styles.radarStatBox}>
+                <Text style={styles.radarStatVal}>{lorries.length}</Text>
+                <Text style={styles.radarStatLbl}>Total Fleet</Text>
+              </View>
+              <View style={styles.radarStatBox}>
+                <Text style={[styles.radarStatVal, { color: "#137333" }]}>
+                  {lorries.filter((l) => l.speedKmH > 0 || l.status === "on_trip").length}
+                </Text>
+                <Text style={styles.radarStatLbl}>In Transit</Text>
+              </View>
+              <View style={styles.radarStatBox}>
+                <Text style={[styles.radarStatVal, { color: "#C58300" }]}>
+                  {lorries.filter((l) => l.status === "empty").length}
+                </Text>
+                <Text style={styles.radarStatLbl}>Available</Text>
+              </View>
+            </View>
+
+            {/* IN-APP INTERACTIVE SRI LANKA LIVE GPS RADAR (ALWAYS ACTIVE) */}
+            <View style={styles.radarContainer}>
+              <View style={styles.radarHeader}>
+                <View style={styles.radarTitleRow}>
+                  <View style={styles.greenDot} />
+                  <Text style={styles.radarTitle}>Sri Lanka Live GPS Radar Map</Text>
+                </View>
+                <Text style={styles.radarSub}>
+                  {lorries.length > 0
+                    ? `${lorries.length} vehicle(s) tracking • Tap any pin to inspect telemetry`
+                    : "Live Radar Active • Standby for driver GPS connections"}
+                </Text>
+              </View>
+
+              {/* Radar Grid Canvas */}
+              <View style={styles.radarCanvas}>
+                {/* Grid Lines */}
+                <View style={styles.radarGridH1} />
+                <View style={styles.radarGridH2} />
+                <View style={styles.radarGridV1} />
+                <View style={styles.radarGridV2} />
+
+                {/* Major Sri Lanka Hub City Anchors */}
+                <View style={[styles.radarCityAnchor, { left: "18%", top: "66%" }]}>
+                  <View style={styles.radarCityDot} />
+                  <Text style={styles.radarCityText}>Colombo</Text>
+                </View>
+                <View style={[styles.radarCityAnchor, { left: "45%", top: "57%" }]}>
+                  <View style={styles.radarCityDot} />
+                  <Text style={styles.radarCityText}>Kandy</Text>
+                </View>
+                <View style={[styles.radarCityAnchor, { left: "26%", top: "86%" }]}>
+                  <View style={styles.radarCityDot} />
+                  <Text style={styles.radarCityText}>Galle</Text>
+                </View>
+                <View style={[styles.radarCityAnchor, { left: "46%", top: "42%" }]}>
+                  <View style={styles.radarCityDot} />
+                  <Text style={styles.radarCityText}>Dambulla</Text>
+                </View>
+                <View style={[styles.radarCityAnchor, { left: "36%", top: "31%" }]}>
+                  <View style={styles.radarCityDot} />
+                  <Text style={styles.radarCityText}>Anuradhapura</Text>
+                </View>
+                <View style={[styles.radarCityAnchor, { left: "34%", top: "10%" }]}>
+                  <View style={styles.radarCityDot} />
+                  <Text style={styles.radarCityText}>Jaffna</Text>
+                </View>
+
+                {/* Empty State Banner when no vehicles */}
+                {lorries.length === 0 && (
+                  <View style={styles.radarEmptyBanner}>
+                    <Text style={styles.radarEmptyText}>📡 Radar Active • Waiting for Driver GPS</Text>
+                  </View>
+                )}
+
+                {/* Dynamic Vehicle Pins */}
+                {lorries.map((l) => {
+                  const rawLat = Number(l.lat);
+                  const rawLng = Number(l.lng);
+                  const validLat = Number.isFinite(rawLat) && rawLat >= 5.5 && rawLat <= 10.2 ? rawLat : 6.9271;
+                  const validLng = Number.isFinite(rawLng) && rawLng >= 79.2 && rawLng <= 82.2 ? rawLng : 79.8612;
+
+                  // Normalize Sri Lanka geographic bounds: Lat 5.9-9.8, Lng 79.6-81.9
+                  const leftPct = Math.max(8, Math.min(88, ((validLng - 79.6) / (81.9 - 79.6)) * 100));
+                  const topPct = Math.max(8, Math.min(88, ((9.8 - validLat) / (9.8 - 5.9)) * 100));
+                  const isMoving = (l.speedKmH || 0) > 0;
+                  const isOnTrip = l.status === "on_trip";
+
+                  return (
+                    <TouchableOpacity
+                      key={`pin-${l.id}`}
+                      onPress={() => {
+                        setSelectedGpsLorry(l);
+                        setGpsModalVisible(true);
+                      }}
+                      style={[
+                        styles.radarPinContainer,
+                        { left: `${leftPct}%` as any, top: `${topPct}%` as any },
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.radarPinPulse,
+                          isOnTrip ? styles.radarPinPulseTrip : styles.radarPinPulseEmpty,
+                        ]}
+                      />
+                      <View
+                        style={[
+                          styles.radarPinCore,
+                          isOnTrip ? styles.radarPinCoreTrip : styles.radarPinCoreEmpty,
+                        ]}
+                      >
+                        <Text style={styles.radarPinIcon}>🚚</Text>
+                      </View>
+                      <View style={styles.radarPinBadge}>
+                        <Text style={styles.radarPinPlate}>{l.plate.split("-").pop() || l.plate}</Text>
+                        {isMoving && (
+                          <Text style={styles.radarPinSpeed}>{l.speedKmH}k</Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
 
             {lorries.length === 0 ? (
@@ -325,17 +490,39 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
                   {/* GPS Telemetry Box */}
                   <View style={styles.telemetryBox}>
-                    <Text style={styles.telemetryTitle}>📍 Live GPS Telemetry</Text>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                      <Text style={styles.telemetryTitle}>📍 Live GPS Telemetry</Text>
+                      <Text style={styles.telemetryTime}>{l.lastUpdated || "Just now"}</Text>
+                    </View>
                     <Text style={styles.telemetryCoords}>
-                      Coords: {l.lat.toFixed(6)}°, {l.lng.toFixed(6)}°
+                      Coords: {l.lat.toFixed(5)}°, {l.lng.toFixed(5)}°
                     </Text>
-                    <Text style={styles.telemetrySpeed}>
-                      Speed: {l.speedKmH} km/h • Heading: {l.heading}°
-                    </Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}>
+                      <View style={[styles.speedTag, l.speedKmH > 0 ? styles.speedTagMoving : styles.speedTagStopped]}>
+                        <Text style={styles.speedTagText}>
+                          {l.speedKmH > 0 ? `🟢 Moving: ${l.speedKmH} km/h` : "🟡 Stationary / Parked"}
+                        </Text>
+                      </View>
+                      <Text style={styles.telemetrySpeed}>
+                        Heading: {l.heading}°
+                      </Text>
+                    </View>
                   </View>
 
                   {/* Actions */}
                   <View style={styles.cardActionsRow}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setSelectedGpsLorry(l);
+                        setGpsModalVisible(true);
+                      }}
+                      style={[styles.btnOutline, { backgroundColor: "#FFD000", borderColor: "#FFD000" }]}
+                    >
+                      <Text style={[styles.btnOutlineText, { color: "#26231B", fontWeight: "900" }]}>
+                        🗺️ Track on Live Map
+                      </Text>
+                    </TouchableOpacity>
+
                     <TouchableOpacity
                       onPress={() => updateLorryTripStatus(l.id, l.status === "empty" ? "on_trip" : "empty")}
                       style={styles.btnOutline}
@@ -349,7 +536,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                       onPress={() => Linking.openURL(`https://www.google.com/maps?q=${l.lat},${l.lng}`)}
                       style={styles.btnOutline}
                     >
-                      <Text style={styles.btnOutlineText}>Google Maps ↗</Text>
+                      <Text style={styles.btnOutlineText}>Maps ↗</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -455,6 +642,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                     {b.packageDetails ? <Text style={styles.bookingPackageText}>📦 {b.packageDetails}</Text> : null}
                   </View>
 
+                  {/* Smart Nearest Lorry Recommendation Preview */}
+                  {!b.assignedPlate && b.status === "pending" && (
+                    (() => {
+                      const rec = recommendBestLorriesForBooking(b.pickupCity, b.vehicleType, lorries);
+                      if (!rec.bestMatch) return null;
+                      return (
+                        <View style={styles.smartRecQuickBox}>
+                          <View style={styles.smartRecQuickHeader}>
+                            <Text style={styles.smartRecQuickTitle}>✨ NEAREST RECOMMENDED VEHICLE</Text>
+                            <Text style={styles.smartRecQuickDist}>{rec.bestMatch.distanceKm} km away</Text>
+                          </View>
+                          <Text style={styles.smartRecQuickDriver}>
+                            🚚 {rec.bestMatch.lorry.plate} ({rec.bestMatch.lorry.driverName}) • {rec.bestMatch.reason}
+                          </Text>
+                        </View>
+                      );
+                    })()
+                  )}
+
                   {/* Assignment Status */}
                   {b.assignedPlate ? (
                     <View style={styles.assignedBox}>
@@ -470,10 +676,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                         setSelectedBooking(b);
                         setAssignModalVisible(true);
                       }}
-                      style={styles.assignBtn}
+                      style={[
+                        styles.assignBtn,
+                        !b.assignedPlate && { backgroundColor: "#FFD000" }
+                      ]}
                     >
-                      <Text style={styles.assignBtnText}>
-                        {b.assignedPlate ? "Reassign Lorry" : "⚡ Assign Driver & Lorry"}
+                      <Text style={[
+                        styles.assignBtnText,
+                        !b.assignedPlate && { color: "#26231B", fontWeight: "900" }
+                      ]}>
+                        {b.assignedPlate ? "Reassign Lorry" : "⚡ Assign Recommended Lorry"}
                       </Text>
                     </TouchableOpacity>
 
@@ -811,39 +1023,239 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         </View>
       </Modal>
 
-      {/* MODAL 4: ASSIGN DRIVER TO BOOKING */}
+      {/* MODAL 4: SMART DISPATCH & VEHICLE RECOMMENDATION */}
       <Modal visible={assignModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>Assign Lorry to Booking</Text>
-            <Text style={styles.modalSubtitle}>
-              {selectedBooking?.pickupCity} ➔ {selectedBooking?.deliveryCity} ({selectedBooking?.customerName})
-            </Text>
+          <View style={[styles.modalBox, { maxHeight: "90%" }]}>
+            <View style={styles.dispatchModalHeader}>
+              <View style={styles.dispatchBadgeRow}>
+                <View style={styles.greenDot} />
+                <Text style={styles.dispatchBadgeText}>SMART FLEET DISPATCH ENGINE</Text>
+              </View>
+              <Text style={styles.modalTitle}>Assign Vehicle to Booking</Text>
+              <Text style={styles.modalSubtitle}>
+                📍 {selectedBooking?.pickupCity} ➔ 🏁 {selectedBooking?.deliveryCity} ({selectedBooking?.vehicleType})
+              </Text>
+            </View>
 
-            <ScrollView style={{ maxHeight: 250, marginVertical: 10 }}>
-              {drivers.length === 0 ? (
-                <Text style={{ textAlign: "center", color: "#666", padding: 20 }}>
-                  No drivers available. Register a driver first.
-                </Text>
-              ) : (
-                drivers.map((d) => (
-                  <TouchableOpacity
-                    key={d.driverId}
-                    onPress={() => handleAssignDriverToBooking(d)}
-                    style={styles.assignDriverItem}
-                  >
-                    <View>
-                      <Text style={styles.assignDriverName}>{d.name}</Text>
-                      <Text style={styles.assignDriverSub}>{d.plate} • {d.vehicleType}</Text>
+            {(() => {
+              if (!selectedBooking) return null;
+              const rec = recommendBestLorriesForBooking(
+                selectedBooking.pickupCity,
+                selectedBooking.vehicleType,
+                lorries
+              );
+
+              return (
+                <ScrollView style={{ maxHeight: 380, marginVertical: 8 }}>
+                  {/* Highlighted #1 AI Recommendation Card */}
+                  {rec.bestMatch && (
+                    <View style={styles.dispatchBestCard}>
+                      <View style={styles.dispatchBestBadgeRow}>
+                        <Text style={styles.dispatchBestBadgeText}>✨ #1 BEST MATCH (NEAREST AVAILABLE)</Text>
+                        <Text style={styles.dispatchBestDist}>{rec.bestMatch.distanceKm} km away</Text>
+                      </View>
+
+                      <Text style={styles.dispatchBestPlate}>{rec.bestMatch.lorry.plate}</Text>
+                      <Text style={styles.dispatchBestDriver}>
+                        👨‍✈️ Driver: {rec.bestMatch.lorry.driverName} • {rec.bestMatch.lorry.vehicleType}
+                      </Text>
+                      <Text style={styles.dispatchBestReason}>
+                        📍 {rec.bestMatch.reason}
+                      </Text>
+
+                      <TouchableOpacity
+                        onPress={() => handleAssignDriverToBooking(rec.bestMatch!.lorry)}
+                        style={styles.dispatchBestActionBtn}
+                      >
+                        <Text style={styles.dispatchBestActionText}>
+                          ⚡ Dispatch This Lorry ({rec.bestMatch.lorry.plate})
+                        </Text>
+                      </TouchableOpacity>
                     </View>
-                    <Text style={styles.assignDriverBtnText}>Assign ➔</Text>
-                  </TouchableOpacity>
-                ))
-              )}
+                  )}
+
+                  {/* All Vehicles Ranked by Distance */}
+                  <Text style={styles.dispatchAllTitle}>
+                    ALL FLEET VEHICLES (RANKED BY PROXIMITY):
+                  </Text>
+
+                  {rec.rankedMatches.length === 0 ? (
+                    <Text style={{ textAlign: "center", color: "#666", padding: 20 }}>
+                      No active vehicles in fleet. Register a driver or vehicle first.
+                    </Text>
+                  ) : (
+                    rec.rankedMatches.map((match, idx) => {
+                      const isBest = idx === 0 && rec.bestMatch;
+                      const l = match.lorry;
+
+                      return (
+                        <TouchableOpacity
+                          key={`dispatch-${l.id}-${idx}`}
+                          onPress={() => handleAssignDriverToBooking(l)}
+                          style={[
+                            styles.assignDriverItem,
+                            isBest && { borderColor: "#FFD000", borderWidth: 1.5 },
+                          ]}
+                        >
+                          <View style={{ flex: 1, marginRight: 8 }}>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                              <Text style={styles.assignDriverName}>{l.plate}</Text>
+                              <View style={l.status === "empty" ? styles.statusBadgeEmptyMini : styles.statusBadgeTripMini}>
+                                <Text style={l.status === "empty" ? styles.statusTextEmptyMini : styles.statusTextTripMini}>
+                                  {l.status === "empty" ? "AVAILABLE" : "ON TRIP"}
+                                </Text>
+                              </View>
+                            </View>
+                            <Text style={styles.assignDriverSub}>
+                              👨‍✈️ {l.driverName} • {l.vehicleType}
+                            </Text>
+                            <Text style={styles.assignDriverDist}>
+                              📍 {match.distanceKm} km from {selectedBooking.pickupCity}
+                            </Text>
+                          </View>
+
+                          <View style={styles.assignBtnPill}>
+                            <Text style={styles.assignDriverBtnText}>Assign ➔</Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
+                </ScrollView>
+              );
+            })()}
+
+            <TouchableOpacity
+              onPress={() => {
+                setAssignModalVisible(false);
+                setSelectedBooking(null);
+              }}
+              style={styles.modalCancelBtn}
+            >
+              <Text style={[styles.modalCancelBtnText, { textAlign: "center" }]}>Close Dispatch</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL 5: LIVE GPS TELEMETRY & IN-APP MAP INSPECTOR */}
+      <Modal visible={gpsModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalBox, { maxHeight: "88%" }]}>
+            <View style={styles.gpsModalHeader}>
+              <View>
+                <View style={styles.gpsModalBadgeRow}>
+                  <View style={styles.greenDot} />
+                  <Text style={styles.gpsModalBadgeText}>LIVE TELEMETRY BROADCAST</Text>
+                </View>
+                <Text style={styles.gpsModalPlate}>{selectedGpsLorry?.plate}</Text>
+                <Text style={styles.gpsModalRoute}>{selectedGpsLorry?.route}</Text>
+              </View>
+              <View
+                style={
+                  selectedGpsLorry?.status === "on_trip"
+                    ? styles.statusBadgeTrip
+                    : styles.statusBadgeEmpty
+                }
+              >
+                <Text
+                  style={
+                    selectedGpsLorry?.status === "on_trip"
+                      ? styles.statusTextTrip
+                      : styles.statusTextEmpty
+                  }
+                >
+                  {selectedGpsLorry?.status === "on_trip" ? "ON TRIP" : "AVAILABLE"}
+                </Text>
+              </View>
+            </View>
+
+            <ScrollView style={{ marginVertical: 10 }}>
+              {/* Telemetry Detail Cards */}
+              <View style={styles.gpsMetricsGrid}>
+                <View style={styles.gpsMetricCard}>
+                  <Text style={styles.gpsMetricLbl}>CURRENT SPEED</Text>
+                  <Text style={[styles.gpsMetricVal, { color: (selectedGpsLorry?.speedKmH || 0) > 0 ? "#137333" : "#C58300" }]}>
+                    {selectedGpsLorry?.speedKmH || 0} km/h
+                  </Text>
+                  <Text style={styles.gpsMetricSub}>
+                    {(selectedGpsLorry?.speedKmH || 0) > 0 ? "🟢 Moving on Highway" : "🟡 Stationary / Idle"}
+                  </Text>
+                </View>
+
+                <View style={styles.gpsMetricCard}>
+                  <Text style={styles.gpsMetricLbl}>BEARING & HEADING</Text>
+                  <Text style={styles.gpsMetricVal}>{selectedGpsLorry?.heading || 0}°</Text>
+                  <Text style={styles.gpsMetricSub}>🧭 Directional Angle</Text>
+                </View>
+              </View>
+
+              {/* Exact GPS Coordinates */}
+              <View style={styles.gpsCoordsCard}>
+                <Text style={styles.gpsCoordsLbl}>📍 EXACT GEOGRAPHIC COORDINATES</Text>
+                <Text style={styles.gpsCoordsVal}>
+                  Latitude: {selectedGpsLorry?.lat?.toFixed(6)}° N
+                </Text>
+                <Text style={styles.gpsCoordsVal}>
+                  Longitude: {selectedGpsLorry?.lng?.toFixed(6)}° E
+                </Text>
+                <Text style={styles.gpsCoordsSub}>
+                  Last Broadcast: {selectedGpsLorry?.lastUpdated || "Just now"}
+                </Text>
+              </View>
+
+              {/* Driver Details & Direct Call */}
+              <View style={styles.gpsDriverCard}>
+                <Text style={styles.gpsDriverTitle}>ASSIGNED OPERATOR</Text>
+                <Text style={styles.gpsDriverName}>
+                  👨‍✈️ {selectedGpsLorry?.driverName || "Fleet Driver"}
+                </Text>
+                <Text style={styles.gpsDriverId}>
+                  ID: {selectedGpsLorry?.driverId || "Unassigned"} • {selectedGpsLorry?.vehicleType || "Lorry"}
+                </Text>
+              </View>
+
+              {/* Quick Actions */}
+              <View style={{ gap: 8, marginTop: 10 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (selectedGpsLorry) {
+                      Linking.openURL(
+                        `https://www.google.com/maps/search/?api=1&query=${selectedGpsLorry.lat},${selectedGpsLorry.lng}`
+                      );
+                    }
+                  }}
+                  style={styles.gpsNavBtn}
+                >
+                  <Text style={styles.gpsNavBtnText}>🗺️ Open Full Google Maps Navigation ↗</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={async () => {
+                    if (selectedGpsLorry) {
+                      const newStatus = selectedGpsLorry.status === "empty" ? "on_trip" : "empty";
+                      await updateLorryTripStatus(selectedGpsLorry.id, newStatus);
+                      setSelectedGpsLorry({ ...selectedGpsLorry, status: newStatus });
+                    }
+                  }}
+                  style={styles.gpsToggleBtn}
+                >
+                  <Text style={styles.gpsToggleBtnText}>
+                    {selectedGpsLorry?.status === "empty" ? "Mark Status as 'On Trip'" : "Mark Status as 'Empty / Available'"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </ScrollView>
 
-            <TouchableOpacity onPress={() => setAssignModalVisible(false)} style={styles.modalCancelBtn}>
-              <Text style={styles.modalCancelBtnText}>Close</Text>
+            <TouchableOpacity
+              onPress={() => {
+                setGpsModalVisible(false);
+                setSelectedGpsLorry(null);
+              }}
+              style={styles.modalCancelBtn}
+            >
+              <Text style={[styles.modalCancelBtnText, { textAlign: "center" }]}>Close Live View</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1460,5 +1872,506 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "900",
     color: "#137333",
+  },
+  // RADAR & LIVE GPS STYLES
+  radarStatsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+  },
+  radarStatBox: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    padding: 10,
+    borderRadius: 10,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E5DEC9",
+  },
+  radarStatVal: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#26231B",
+  },
+  radarStatLbl: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#7A7360",
+    marginTop: 2,
+  },
+  radarContainer: {
+    backgroundColor: "#1C1A14",
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#3B3727",
+  },
+  radarHeader: {
+    marginBottom: 10,
+  },
+  radarTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  radarTitle: {
+    color: "#F6F1DF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  radarSub: {
+    color: "#A8A18C",
+    fontSize: 10,
+    marginTop: 2,
+  },
+  radarCanvas: {
+    height: 190,
+    backgroundColor: "#27241B",
+    borderRadius: 10,
+    position: "relative",
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#3B3727",
+  },
+  radarGridH1: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: "33%",
+    height: 1,
+    backgroundColor: "rgba(255, 208, 0, 0.15)",
+  },
+  radarGridH2: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: "66%",
+    height: 1,
+    backgroundColor: "rgba(255, 208, 0, 0.15)",
+  },
+  radarGridV1: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: "33%",
+    width: 1,
+    backgroundColor: "rgba(255, 208, 0, 0.15)",
+  },
+  radarGridV2: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: "66%",
+    width: 1,
+    backgroundColor: "rgba(255, 208, 0, 0.15)",
+  },
+  radarRegionLbl: {
+    position: "absolute",
+    color: "rgba(255, 208, 0, 0.25)",
+    fontSize: 9,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  radarPinContainer: {
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: -14,
+    marginTop: -14,
+    zIndex: 10,
+  },
+  radarPinPulse: {
+    position: "absolute",
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    opacity: 0.35,
+  },
+  radarPinPulseTrip: {
+    backgroundColor: "#137333",
+  },
+  radarPinPulseEmpty: {
+    backgroundColor: "#FFD000",
+  },
+  radarPinCore: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+  },
+  radarPinCoreTrip: {
+    backgroundColor: "#137333",
+  },
+  radarPinCoreEmpty: {
+    backgroundColor: "#FFD000",
+  },
+  radarPinIcon: {
+    fontSize: 9,
+  },
+  radarPinBadge: {
+    backgroundColor: "rgba(28, 26, 20, 0.9)",
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    marginTop: 2,
+    flexDirection: "row",
+    gap: 2,
+    alignItems: "center",
+    borderWidth: 0.5,
+    borderColor: "rgba(255, 208, 0, 0.4)",
+  },
+  radarPinPlate: {
+    color: "#FFFFFF",
+    fontSize: 8,
+    fontWeight: "800",
+  },
+  radarPinSpeed: {
+    color: "#137333",
+    fontSize: 8,
+    fontWeight: "900",
+  },
+  speedTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  speedTagMoving: {
+    backgroundColor: "#E6F4EA",
+  },
+  speedTagStopped: {
+    backgroundColor: "#FEF7E0",
+  },
+  speedTagText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#26231B",
+  },
+  telemetryTime: {
+    fontSize: 10,
+    color: "#7A7360",
+    fontWeight: "600",
+  },
+  gpsModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5DEC9",
+    paddingBottom: 10,
+    marginBottom: 8,
+  },
+  gpsModalBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 2,
+  },
+  gpsModalBadgeText: {
+    fontSize: 9,
+    fontWeight: "900",
+    color: "#137333",
+    letterSpacing: 0.5,
+  },
+  gpsModalPlate: {
+    fontSize: 17,
+    fontWeight: "900",
+    color: "#26231B",
+  },
+  gpsModalRoute: {
+    fontSize: 11,
+    color: "#7A7360",
+    fontWeight: "600",
+  },
+  gpsMetricsGrid: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 8,
+  },
+  gpsMetricCard: {
+    flex: 1,
+    backgroundColor: "#F4F2EA",
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E5DEC9",
+  },
+  gpsMetricLbl: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#7A7360",
+  },
+  gpsMetricVal: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#26231B",
+    marginTop: 2,
+  },
+  gpsMetricSub: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#7A7360",
+    marginTop: 2,
+  },
+  gpsCoordsCard: {
+    backgroundColor: "#FDFBE8",
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#F4ECB8",
+    marginBottom: 8,
+  },
+  gpsCoordsLbl: {
+    fontSize: 9,
+    fontWeight: "900",
+    color: "#7A6200",
+    marginBottom: 4,
+  },
+  gpsCoordsVal: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#26231B",
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+  },
+  gpsCoordsSub: {
+    fontSize: 10,
+    color: "#7A7360",
+    marginTop: 4,
+    fontStyle: "italic",
+  },
+  gpsDriverCard: {
+    backgroundColor: "#F4F2EA",
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E5DEC9",
+    marginBottom: 8,
+  },
+  gpsDriverTitle: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#7A7360",
+  },
+  gpsDriverName: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#26231B",
+    marginTop: 2,
+  },
+  gpsDriverId: {
+    fontSize: 11,
+    color: "#7A7360",
+    marginTop: 2,
+  },
+  gpsNavBtn: {
+    backgroundColor: "#26231B",
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  gpsNavBtnText: {
+    color: "#FFD000",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  gpsToggleBtn: {
+    backgroundColor: "#FFD000",
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  gpsToggleBtnText: {
+    color: "#26231B",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  // SMART RECOMMENDATION & DISPATCH STYLES
+  smartRecQuickBox: {
+    backgroundColor: "#FDFBE8",
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#F4ECB8",
+    marginVertical: 6,
+  },
+  smartRecQuickHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 2,
+  },
+  smartRecQuickTitle: {
+    fontSize: 9,
+    fontWeight: "900",
+    color: "#7A6200",
+    letterSpacing: 0.5,
+  },
+  smartRecQuickDist: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#137333",
+  },
+  smartRecQuickDriver: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#26231B",
+  },
+  dispatchModalHeader: {
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5DEC9",
+    paddingBottom: 8,
+    marginBottom: 6,
+  },
+  dispatchBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 2,
+  },
+  dispatchBadgeText: {
+    fontSize: 9,
+    fontWeight: "900",
+    color: "#137333",
+    letterSpacing: 0.5,
+  },
+  dispatchBestCard: {
+    backgroundColor: "#FDFBE8",
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 2,
+    borderColor: "#FFD000",
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  dispatchBestBadgeRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  dispatchBestBadgeText: {
+    fontSize: 9.5,
+    fontWeight: "900",
+    color: "#7A6200",
+    letterSpacing: 0.5,
+  },
+  dispatchBestDist: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: "#137333",
+    backgroundColor: "#E6F4EA",
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  dispatchBestPlate: {
+    fontSize: 17,
+    fontWeight: "900",
+    color: "#26231B",
+  },
+  dispatchBestDriver: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#26231B",
+    marginTop: 2,
+  },
+  dispatchBestReason: {
+    fontSize: 11,
+    color: "#7A6200",
+    fontWeight: "600",
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  dispatchBestActionBtn: {
+    backgroundColor: "#FFD000",
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  dispatchBestActionText: {
+    color: "#26231B",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  dispatchAllTitle: {
+    fontSize: 10,
+    fontWeight: "900",
+    color: "#7A7360",
+    letterSpacing: 0.5,
+    marginVertical: 6,
+  },
+  statusBadgeEmptyMini: {
+    backgroundColor: "#FEF7E0",
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  statusTextEmptyMini: {
+    fontSize: 8,
+    fontWeight: "800",
+    color: "#7A6200",
+  },
+  statusBadgeTripMini: {
+    backgroundColor: "#E6F4EA",
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  statusTextTripMini: {
+    fontSize: 8,
+    fontWeight: "800",
+    color: "#137333",
+  },
+  assignDriverDist: {
+    fontSize: 10,
+    color: "#137333",
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  assignBtnPill: {
+    backgroundColor: "#26231B",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  radarCityAnchor: {
+    position: "absolute",
+    alignItems: "center",
+    transform: [{ translateX: -15 }, { translateY: -10 }],
+    zIndex: 2,
+  },
+  radarCityDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.25)",
+    marginBottom: 2,
+  },
+  radarCityText: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.35)",
+  },
+  radarEmptyBanner: {
+    position: "absolute",
+    top: "45%",
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  radarEmptyText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "rgba(255,255,255,0.4)",
   },
 });

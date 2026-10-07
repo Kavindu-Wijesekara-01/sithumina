@@ -57,8 +57,33 @@ export async function getCurrentGpsPosition(): Promise<GpsCoordinate | null> {
 }
 
 /**
- * Start continuous GPS position streaming
- * Calls callback whenever location changes (every 5 meters or 5 seconds)
+ * Calculate approximate distance in meters between two GPS coordinates
+ */
+function calculateDistanceMeters(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371e3; // Earth radius in meters
+  const phi1 = (lat1 * Math.PI) / 180;
+  const phi2 = (lat2 * Math.PI) / 180;
+  const deltaPhi = ((lat2 - lat1) * Math.PI) / 180;
+  const deltaLambda = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+    Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+}
+
+let lastSentCoordinate: { lat: number; lng: number; time: number } | null = null;
+
+/**
+ * Start continuous GPS position streaming with smart debouncing
+ * Only transmits updates when the vehicle actually moves (>= 15m) or after a heartbeat (every 30s)
  */
 export async function startGpsTracking(
   onLocationUpdate: LocationCallback
@@ -69,19 +94,43 @@ export async function startGpsTracking(
 
     // Stop any existing tracking first
     stopGpsTracking();
+    lastSentCoordinate = null;
 
     locationSubscription = await Location.watchPositionAsync(
       {
-        accuracy: Location.Accuracy.High,
-        timeInterval: 4000, // every 4 seconds
-        distanceInterval: 5, // or every 5 meters
+        accuracy: Location.Accuracy.Balanced,
+        timeInterval: 8000, // sample every 8 seconds
+        distanceInterval: 15, // or minimum 15 meters
       },
       (loc) => {
+        const lat = loc.coords.latitude;
+        const lng = loc.coords.longitude;
+        const now = Date.now();
+        const speedKmH = loc.coords.speed ? Math.max(0, loc.coords.speed * 3.6) : 0;
+
+        // Debounce stationary vehicles to prevent burning quota
+        if (lastSentCoordinate) {
+          const distMeters = calculateDistanceMeters(
+            lastSentCoordinate.lat,
+            lastSentCoordinate.lng,
+            lat,
+            lng
+          );
+          const elapsedSec = (now - lastSentCoordinate.time) / 1000;
+
+          // If vehicle has not moved at least 15m and speed is 0, skip sending unless 30s heartbeat reached
+          if (distMeters < 15 && speedKmH < 3 && elapsedSec < 30) {
+            return;
+          }
+        }
+
+        lastSentCoordinate = { lat, lng, time: now };
+
         onLocationUpdate({
-          latitude: loc.coords.latitude,
-          longitude: loc.coords.longitude,
+          latitude: lat,
+          longitude: lng,
           heading: loc.coords.heading ?? 0,
-          speed: loc.coords.speed ? Math.max(0, loc.coords.speed * 3.6) : 0,
+          speed: speedKmH,
           accuracy: loc.coords.accuracy,
           timestamp: loc.timestamp,
         });

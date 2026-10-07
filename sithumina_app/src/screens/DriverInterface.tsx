@@ -237,6 +237,85 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({
           </TouchableOpacity>
         </View>
 
+        {/* Live Radar Preview */}
+        <View style={styles.radarCard}>
+          <View style={styles.radarHeader}>
+            <View>
+              <Text style={styles.radarTitle}>🗺️ Live Location Map</Text>
+              <Text style={styles.radarSub}>Real-time GPS coordinate plotting across Sri Lanka</Text>
+            </View>
+            <View style={styles.radarLiveBadge}>
+              <View style={[styles.radarLiveDot, isTracking && { backgroundColor: "#1E9E5A" }]} />
+              <Text style={styles.radarLiveText}>{isTracking ? "ONLINE" : "STANDBY"}</Text>
+            </View>
+          </View>
+
+          <View style={styles.radarCanvas}>
+            {/* Grid Lines */}
+            <View style={styles.radarGridH1} />
+            <View style={styles.radarGridH2} />
+            <View style={styles.radarGridH3} />
+            <View style={styles.radarGridV1} />
+            <View style={styles.radarGridV2} />
+
+            {/* Sri Lanka Reference Anchors */}
+            <View style={[styles.radarCityAnchor, { left: "14%", top: "68%" }]}>
+              <View style={styles.radarCityDot} />
+              <Text style={styles.radarCityText}>Colombo</Text>
+            </View>
+            <View style={[styles.radarCityAnchor, { left: "45%", top: "54%" }]}>
+              <View style={styles.radarCityDot} />
+              <Text style={styles.radarCityText}>Kandy</Text>
+            </View>
+            <View style={[styles.radarCityAnchor, { left: "28%", top: "88%" }]}>
+              <View style={styles.radarCityDot} />
+              <Text style={styles.radarCityText}>Galle</Text>
+            </View>
+            <View style={[styles.radarCityAnchor, { left: "44%", top: "39%" }]}>
+              <View style={styles.radarCityDot} />
+              <Text style={styles.radarCityText}>Dambulla</Text>
+            </View>
+            <View style={[styles.radarCityAnchor, { left: "38%", top: "25%" }]}>
+              <View style={styles.radarCityDot} />
+              <Text style={styles.radarCityText}>Anuradhapura</Text>
+            </View>
+            <View style={[styles.radarCityAnchor, { left: "34%", top: "10%" }]}>
+              <View style={styles.radarCityDot} />
+              <Text style={styles.radarCityText}>Jaffna</Text>
+            </View>
+
+            {/* Driver's Live Pin */}
+            {(() => {
+              const rawLat = currentCoords?.latitude || 6.9271;
+              const rawLng = currentCoords?.longitude || 79.8612;
+              const validLat = Number.isFinite(rawLat) && rawLat >= 5.5 && rawLat <= 10.2 ? rawLat : 6.9271;
+              const validLng = Number.isFinite(rawLng) && rawLng >= 79.2 && rawLng <= 82.2 ? rawLng : 79.8612;
+              const leftPct = Math.max(8, Math.min(88, ((validLng - 79.6) / (81.9 - 79.6)) * 100));
+              const topPct = Math.max(8, Math.min(88, ((9.8 - validLat) / (9.8 - 5.9)) * 100));
+
+              return (
+                <View
+                  style={[
+                    styles.driverPinContainer,
+                    { left: `${leftPct}%` as any, top: `${topPct}%` as any },
+                  ]}
+                >
+                  <View style={styles.driverPinPulse} />
+                  <View style={styles.driverPinCore}>
+                    <Text style={styles.driverPinIcon}>🚚</Text>
+                  </View>
+                  <View style={styles.driverPinBadge}>
+                    <Text style={styles.driverPinPlate}>{driver.plate}</Text>
+                    {currentCoords && currentCoords.speed > 0 && (
+                      <Text style={styles.driverPinSpeed}>{Math.round(currentCoords.speed)} km/h</Text>
+                    )}
+                  </View>
+                </View>
+              );
+            })()}
+          </View>
+        </View>
+
         {/* Lorry Trip Availability Status Card */}
         <View style={styles.statusCard}>
           <Text style={styles.cardHeader}>📦 Vehicle Trip Status</Text>
@@ -596,5 +675,165 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: "700",
     color: "#26231B",
+  },
+  radarCard: {
+    backgroundColor: "#1C201C",
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: "#2D372E",
+  },
+  radarHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  radarTitle: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#FFFFFF",
+  },
+  radarSub: {
+    fontSize: 11,
+    color: "#8FA390",
+    marginTop: 2,
+  },
+  radarLiveBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    gap: 5,
+  },
+  radarLiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#8C877A",
+  },
+  radarLiveText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  radarCanvas: {
+    height: 220,
+    backgroundColor: "#111612",
+    borderRadius: 12,
+    position: "relative",
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#243226",
+  },
+  radarGridH1: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: "25%",
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  radarGridH2: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: "50%",
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  radarGridH3: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: "75%",
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  radarGridV1: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: "33%",
+    width: 1,
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  radarGridV2: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: "66%",
+    width: 1,
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  radarCityAnchor: {
+    position: "absolute",
+    alignItems: "center",
+    transform: [{ translateX: -15 }, { translateY: -10 }],
+    zIndex: 2,
+  },
+  radarCityDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.25)",
+    marginBottom: 2,
+  },
+  radarCityText: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.35)",
+  },
+  driverPinContainer: {
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
+    transform: [{ translateX: -16 }, { translateY: -16 }],
+    zIndex: 10,
+  },
+  driverPinPulse: {
+    position: "absolute",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255, 194, 14, 0.25)",
+  },
+  driverPinCore: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#FFC20E",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+    elevation: 4,
+  },
+  driverPinIcon: {
+    fontSize: 13,
+  },
+  driverPinBadge: {
+    backgroundColor: "#26231B",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderWidth: 1,
+    borderColor: "#3D382B",
+  },
+  driverPinPlate: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#FFC20E",
+  },
+  driverPinSpeed: {
+    fontSize: 8.5,
+    fontWeight: "800",
+    color: "#28D17C",
   },
 });

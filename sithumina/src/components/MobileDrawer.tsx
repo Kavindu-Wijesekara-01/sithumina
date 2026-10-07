@@ -171,13 +171,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({ isOpen, onClose }) =
             className="w-full block text-center border-0 bg-[#26231B] text-[var(--y)] text-[14px] font-extrabold py-3 px-4 rounded-[10px] cursor-pointer hover:bg-[#1a1813] transition-all no-underline shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#26231B]"
           >
             {profile ? (
-              <span>
-                {profile.role === "driver"
-                  ? "🚚 Driver Account"
-                  : profile.role === "admin"
-                  ? "🔐 Dispatch Admin"
-                  : "👤 My Profile"}
-              </span>
+              <span>👤 {profile.name || "My Consignments"}</span>
             ) : (
               <span>{t.login}</span>
             )}

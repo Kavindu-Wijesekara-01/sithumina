@@ -3,6 +3,7 @@ import {
   doc,
   getDocs,
   addDoc,
+  setDoc,
   updateDoc,
   deleteDoc,
   onSnapshot,
@@ -30,8 +31,8 @@ export async function seedInitialLorriesIfEmpty(): Promise<boolean> {
 
 /**
  * Subscribe to live lorries in real time.
- * Syncs dynamically with the central fleet API (updated by mobile driver GPS broadcasts)
- * and falls back/enhances with Firestore onSnapshot.
+ * Uses Firebase Firestore onSnapshot as the primary zero-cost real-time streaming channel,
+ * with a single initial fallback check to Next.js API.
  */
 export function subscribeLorries(
   callback: (lorries: Lorry[]) => void,
@@ -39,13 +40,13 @@ export function subscribeLorries(
 ): () => void {
   let isMounted = true;
 
-  // Real-time API fetcher
-  const fetchLiveLorries = async () => {
+  // Single fallback fetch for local offline dev
+  const fetchLiveLorriesFallback = async () => {
     try {
       const res = await fetch("/api/lorries", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
-        if (isMounted && Array.isArray(data.lorries)) {
+        if (isMounted && Array.isArray(data.lorries) && data.lorries.length > 0) {
           callback(data.lorries);
         }
       }
@@ -56,13 +57,7 @@ export function subscribeLorries(
     }
   };
 
-  // Immediate initial fetch
-  fetchLiveLorries();
-
-  // Periodic live GPS polling (every 2 seconds) so mobile app GPS updates stream live to the map
-  const pollTimer = setInterval(fetchLiveLorries, 2000);
-
-  // Firestore onSnapshot listener if available
+  // Primary: Firestore onSnapshot real-time WebSocket listener (Zero Vercel Function Invocations)
   let unsubscribeFirestore = () => {};
   try {
     const colRef = collection(db, LORRIES_COL);
@@ -81,8 +76,8 @@ export function subscribeLorries(
               driverName: data.driverName || "Driver",
               driverId: data.driverId,
               vehicleType: data.vehicleType || "Lorry",
-              lat: typeof data.lat === "number" ? data.lat : 6.9271,
-              lng: typeof data.lng === "number" ? data.lng : 79.8612,
+              lat: Number.isFinite(Number(data.lat)) ? Number(data.lat) : 6.9271,
+              lng: Number.isFinite(Number(data.lng)) ? Number(data.lng) : 79.8612,
               heading: data.heading ?? 0,
               speedKmH: data.speedKmH ?? 0,
               status: (data.status as LorryStatus) || "empty",
@@ -90,19 +85,22 @@ export function subscribeLorries(
             });
           });
           callback(items);
+        } else {
+          // If Firestore collection has no items yet, check fallback store once
+          fetchLiveLorriesFallback();
         }
       },
-      () => {
-        // Silently handled by API polling
+      (err) => {
+        console.warn("Firestore snapshot error, falling back:", err);
+        fetchLiveLorriesFallback();
       }
     );
   } catch {
-    // Handled by API polling
+    fetchLiveLorriesFallback();
   }
 
   return () => {
     isMounted = false;
-    clearInterval(pollTimer);
     unsubscribeFirestore();
   };
 }
@@ -179,6 +177,24 @@ export async function updateLorryLocation(
  * Add a new lorry directly to Fleet
  */
 export async function addNewLorry(lorry: Omit<Lorry, "id">): Promise<string> {
+  const lorryId = `lorry-${lorry.plate.replace(/[^A-Z0-9]/gi, "").toLowerCase()}`;
+
+  // 1. Direct to Firestore first
+  try {
+    const docRef = doc(db, LORRIES_COL, lorryId);
+    await setDoc(
+      docRef,
+      {
+        ...lorry,
+        updatedAt: Date.now(),
+      },
+      { merge: true }
+    );
+  } catch (e) {
+    console.warn("Firestore add lorry warning:", e);
+  }
+
+  // 2. Also notify API
   try {
     const res = await fetch("/api/lorries", {
       method: "POST",
@@ -186,10 +202,10 @@ export async function addNewLorry(lorry: Omit<Lorry, "id">): Promise<string> {
       body: JSON.stringify(lorry),
     });
     const data = await res.json();
-    return data.lorry?.id || lorry.plate;
+    return data.lorry?.id || lorryId;
   } catch (e) {
-    console.warn("API add lorry warning:", e);
-    return lorry.plate;
+    console.warn("API add lorry notice:", e);
+    return lorryId;
   }
 }
 
@@ -198,17 +214,17 @@ export async function addNewLorry(lorry: Omit<Lorry, "id">): Promise<string> {
  */
 export async function deleteLorry(lorryId: string): Promise<void> {
   try {
+    const docRef = doc(db, LORRIES_COL, lorryId);
+    await deleteDoc(docRef);
+  } catch {}
+
+  try {
     await fetch(`/api/lorries?id=${encodeURIComponent(lorryId)}`, {
       method: "DELETE",
     });
   } catch (e) {
     console.warn("API delete lorry warning:", e);
   }
-
-  try {
-    const docRef = doc(db, LORRIES_COL, lorryId);
-    await deleteDoc(docRef);
-  } catch {}
 }
 
 /* ============================================================
@@ -255,7 +271,22 @@ export async function createBooking(
 ): Promise<{ id: string; trackingId: string }> {
   const trackingId = generateTrackingId();
 
-  // 1. Post to Central Shared API (/api/bookings)
+  // 1. Direct to Firestore first
+  let bookingId = trackingId;
+  try {
+    const colRef = collection(db, BOOKINGS_COL);
+    const docRef = await addDoc(colRef, {
+      ...input,
+      trackingId,
+      status: "pending" as BookingStatus,
+      createdAt: Date.now(),
+    });
+    bookingId = docRef.id;
+  } catch (err) {
+    console.warn("Firestore create booking notice:", err);
+  }
+
+  // 2. Post to Central Shared API (/api/bookings)
   try {
     const res = await fetch("/api/bookings", {
       method: "POST",
@@ -280,36 +311,25 @@ export async function createBooking(
     console.warn("API create booking notice:", err);
   }
 
-  // 2. Also try Firestore
-  try {
-    const colRef = collection(db, BOOKINGS_COL);
-    const docRef = await addDoc(colRef, {
-      ...input,
-      trackingId,
-      status: "pending" as BookingStatus,
-      createdAt: Date.now(),
-    });
-    return { id: docRef.id, trackingId };
-  } catch {
-    return { id: trackingId, trackingId };
-  }
+  return { id: bookingId, trackingId };
 }
 
 /**
  * Subscribe to all bookings in real time (for Admin / Dispatch manager)
+ * Uses Firestore onSnapshot stream with single fallback fetch (Zero polling loops)
  */
 export function subscribeBookings(
   callback: (bookings: Booking[]) => void
 ): () => void {
   let isMounted = true;
 
-  // Real-time API Poller
-  const fetchBookingsApi = async () => {
+  // Single fallback fetch for local offline dev
+  const fetchBookingsApiFallback = async () => {
     try {
       const res = await fetch("/api/bookings", { cache: "no-store" });
       if (res.ok && isMounted) {
         const data = await res.json();
-        if (Array.isArray(data.bookings)) {
+        if (Array.isArray(data.bookings) && data.bookings.length > 0) {
           const mapped: Booking[] = data.bookings.map((b: StoredBooking) => ({
             id: b.id,
             trackingId: b.id,
@@ -331,44 +351,48 @@ export function subscribeBookings(
     }
   };
 
-  fetchBookingsApi();
-  const pollTimer = setInterval(fetchBookingsApi, 2500);
-
-  // Firestore onSnapshot if available
+  // Primary: Firestore onSnapshot
   let unsubFs = () => {};
   try {
     const colRef = collection(db, BOOKINGS_COL);
     unsubFs = onSnapshot(
       query(colRef, orderBy("createdAt", "desc")),
       (snapshot) => {
-        if (!isMounted || snapshot.empty) return;
-        const items: Booking[] = [];
-        snapshot.forEach((d) => {
-          const data = d.data();
-          items.push({
-            id: d.id,
-            trackingId: data.trackingId || d.id.slice(0, 8).toUpperCase(),
-            pickup: data.pickup || "",
-            destination: data.destination || "",
-            vehicleType: data.vehicleType || "14ft",
-            weight: data.weight || "",
-            date: data.date || "",
-            phone: data.phone || "",
-            notes: data.notes || "",
-            status: (data.status as BookingStatus) || "pending",
-            assignedLorryPlate: data.assignedLorryPlate,
-            createdAt: data.createdAt || Date.now(),
+        if (!isMounted) return;
+        if (!snapshot.empty) {
+          const items: Booking[] = [];
+          snapshot.forEach((d) => {
+            const data = d.data();
+            items.push({
+              id: d.id,
+              trackingId: data.trackingId || d.id.slice(0, 8).toUpperCase(),
+              pickup: data.pickup || "",
+              destination: data.destination || "",
+              vehicleType: data.vehicleType || "14ft",
+              weight: data.weight || "",
+              date: data.date || "",
+              phone: data.phone || "",
+              notes: data.notes || "",
+              status: (data.status as BookingStatus) || "pending",
+              assignedLorryPlate: data.assignedLorryPlate,
+              createdAt: data.createdAt || Date.now(),
+            });
           });
-        });
-        callback(items);
+          callback(items);
+        } else {
+          fetchBookingsApiFallback();
+        }
       },
-      () => {}
+      () => {
+        fetchBookingsApiFallback();
+      }
     );
-  } catch {}
+  } catch {
+    fetchBookingsApiFallback();
+  }
 
   return () => {
     isMounted = false;
-    clearInterval(pollTimer);
     unsubFs();
   };
 }

@@ -267,8 +267,10 @@ export function updateLorryGpsInStore(
     return null;
   }
 
-  store.lorries[idx].lat = Number(lat);
-  store.lorries[idx].lng = Number(lng);
+  const parsedLat = Number(lat);
+  const parsedLng = Number(lng);
+  store.lorries[idx].lat = Number.isFinite(parsedLat) ? parsedLat : 6.9271;
+  store.lorries[idx].lng = Number.isFinite(parsedLng) ? parsedLng : 79.8612;
   store.lorries[idx].heading = Math.round(heading) || 0;
   store.lorries[idx].speedKmH = Math.round(speedKmH) || 0;
   store.lorries[idx].lastUpdated = "Just now";

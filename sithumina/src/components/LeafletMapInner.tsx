@@ -14,6 +14,13 @@ interface LeafletMapInnerProps {
   userLocation: [number, number] | null;
 }
 
+export function isValidLatLng(coords: unknown): coords is [number, number] {
+  if (!coords || !Array.isArray(coords) || coords.length !== 2) return false;
+  const lat = Number(coords[0]);
+  const lng = Number(coords[1]);
+  return Number.isFinite(lat) && Number.isFinite(lng);
+}
+
 // Controller component to handle programmatically centering and flying on the map
 function MapController({
   selectedLorry,
@@ -26,18 +33,37 @@ function MapController({
   const prevUserLocation = useRef<[number, number] | null>(null);
 
   useEffect(() => {
-    if (userLocation && userLocation !== prevUserLocation.current) {
+    if (!isValidLatLng(userLocation)) return;
+
+    const isSame =
+      prevUserLocation.current &&
+      prevUserLocation.current[0] === userLocation[0] &&
+      prevUserLocation.current[1] === userLocation[1];
+
+    if (!isSame) {
       prevUserLocation.current = userLocation;
-      map.flyTo(userLocation, 12, { animate: true, duration: 1.5 });
+      try {
+        map.flyTo(userLocation, 12, { animate: true, duration: 1.5 });
+      } catch (err) {
+        console.warn("Leaflet flyTo user location error:", err);
+      }
     }
   }, [userLocation, map]);
 
   useEffect(() => {
     if (selectedLorry) {
-      map.flyTo([selectedLorry.lat, selectedLorry.lng], 11, {
-        animate: true,
-        duration: 1.2,
-      });
+      const lat = Number(selectedLorry.lat);
+      const lng = Number(selectedLorry.lng);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        try {
+          map.flyTo([lat, lng], 11, {
+            animate: true,
+            duration: 1.2,
+          });
+        } catch (err) {
+          console.warn("Leaflet flyTo selected lorry error:", err);
+        }
+      }
     }
   }, [selectedLorry, map]);
 
@@ -119,7 +145,7 @@ export const LeafletMapInner: React.FC<LeafletMapInnerProps> = ({
       />
 
       {/* User GPS location marker */}
-      {userLocation && (
+      {isValidLatLng(userLocation) && (
         <Marker position={userLocation} icon={userIcon}>
           <Popup>
             <div className="p-1 font-sans">
@@ -131,13 +157,19 @@ export const LeafletMapInner: React.FC<LeafletMapInnerProps> = ({
 
       {/* Live Lorry Markers */}
       {lorries.map((lorry) => {
+        const lat = Number(lorry.lat);
+        const lng = Number(lorry.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+          return null;
+        }
+
         const isSelected = lorry.id === selectedLorryId;
         const icon = createMarkerIcon(lorry.status, isSelected);
 
         return (
           <Marker
             key={lorry.id}
-            position={[lorry.lat, lorry.lng]}
+            position={[lat, lng]}
             icon={icon}
             eventHandlers={{
               click: () => onSelectLorry?.(lorry.id),

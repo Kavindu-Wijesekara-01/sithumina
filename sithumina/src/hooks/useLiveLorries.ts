@@ -90,8 +90,10 @@ export function useLiveLorries({
           const deltaLng = Math.sin(angle) * delta + (Math.random() - 0.5) * 0.0001;
 
           // Keep within Sri Lanka bounding box (5.9 to 9.8 lat, 79.6 to 81.9 lng)
-          let newLat = lorry.lat + deltaLat;
-          let newLng = lorry.lng + deltaLng;
+          const baseLat = Number.isFinite(Number(lorry.lat)) ? Number(lorry.lat) : 6.9271;
+          const baseLng = Number.isFinite(Number(lorry.lng)) ? Number(lorry.lng) : 79.8612;
+          let newLat = baseLat + deltaLat;
+          let newLng = baseLng + deltaLng;
           let newHeading = lorry.heading ?? 45;
 
           if (newLat < 6.0 || newLat > 9.7) {

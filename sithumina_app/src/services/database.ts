@@ -1,7 +1,16 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiFetch } from "../config/api";
 import { db } from "../config/firebase";
-import { doc, setDoc, getDoc, getDocs, collection, query, where } from "firebase/firestore";
+import {
+  doc,
+  setDoc,
+  getDoc,
+  getDocs,
+  collection,
+  query,
+  where,
+  onSnapshot,
+} from "firebase/firestore";
 
 export const ADMIN_SECRET_ID = "sithuminaadmin$";
 const LOCAL_DRIVERS_KEY = "@sithumina_local_drivers_cache";
@@ -115,8 +124,30 @@ export async function registerNewDriver(
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error("Timeout")), 1800)
       );
-      const firestorePromise = setDoc(doc(db, "drivers", driverId), driverData);
-      await Promise.race([firestorePromise, timeoutPromise]);
+      const firestoreDriverPromise = setDoc(doc(db, "drivers", driverId), driverData);
+      const firestoreLorryPromise = setDoc(
+        doc(db, "lorries", lorryId),
+        {
+          id: lorryId,
+          plate: cleanPlate,
+          route: driverData.route,
+          driverName: driverData.name,
+          driverId,
+          vehicleType: driverData.vehicleType,
+          lat: 6.9271,
+          lng: 79.8612,
+          heading: 0,
+          speedKmH: 0,
+          status: "empty",
+          lastUpdated: "Just registered",
+          updatedAt: Date.now(),
+        },
+        { merge: true }
+      );
+      await Promise.race([
+        Promise.all([firestoreDriverPromise, firestoreLorryPromise]),
+        timeoutPromise,
+      ]);
     } catch {
       // Ignored - API and local storage handle persistence
     }
@@ -373,6 +404,65 @@ export async function getAllLorries(): Promise<LorryRecord[]> {
   return [];
 }
 
+/**
+ * Subscribe to all live lorries in real time via Firestore onSnapshot
+ * Streams live GPS broadcasts from drivers directly to the Admin Dashboard.
+ */
+export function subscribeAdminLorries(
+  callback: (lorries: LorryRecord[]) => void
+): () => void {
+  let isMounted = true;
+
+  // Real-time Firestore onSnapshot listener
+  let unsubscribeFs = () => {};
+  try {
+    const colRef = collection(db, "lorries");
+    unsubscribeFs = onSnapshot(
+      colRef,
+      (snapshot) => {
+        if (!isMounted) return;
+        if (!snapshot.empty) {
+          const list: LorryRecord[] = [];
+          snapshot.forEach((d) => {
+            const data = d.data();
+            list.push({
+              id: d.id,
+              plate: data.plate || "WP LK-0000",
+              route: data.route || "Island-wide",
+              driverName: data.driverName || "Driver",
+              driverId: data.driverId || "",
+              vehicleType: data.vehicleType || "Lorry",
+              lat: Number.isFinite(Number(data.lat)) ? Number(data.lat) : 6.9271,
+              lng: Number.isFinite(Number(data.lng)) ? Number(data.lng) : 79.8612,
+              heading: Number(data.heading) || 0,
+              speedKmH: Number(data.speedKmH) || 0,
+              status: (data.status as "empty" | "on_trip") || "empty",
+              lastUpdated: data.lastUpdated || "Just now",
+              updatedAt: data.updatedAt || Date.now(),
+            });
+          });
+          callback(list);
+        }
+      },
+      (err) => {
+        console.warn("Admin Firestore subscription notice:", err);
+      }
+    );
+  } catch {}
+
+  // Fallback initial API load
+  getAllLorries().then((initial) => {
+    if (isMounted && initial.length > 0) {
+      callback(initial);
+    }
+  });
+
+  return () => {
+    isMounted = false;
+    unsubscribeFs();
+  };
+}
+
 export async function addNewLorryToFleet(input: {
   plate: string;
   route: string;
@@ -413,6 +503,67 @@ export async function getAllBookings(): Promise<BookingRecord[]> {
   return [];
 }
 
+/**
+ * Real-time subscription to Customer Bookings from Firestore
+ * Ensures customer bookings created on the Web Portal appear instantly in Admin Dashboard.
+ */
+export function subscribeAdminBookings(
+  callback: (bookings: BookingRecord[]) => void
+): () => void {
+  let isMounted = true;
+
+  let unsubscribeFs = () => {};
+  try {
+    const colRef = collection(db, "bookings");
+    unsubscribeFs = onSnapshot(
+      query(colRef),
+      (snapshot) => {
+        if (!isMounted) return;
+        if (!snapshot.empty) {
+          const list: BookingRecord[] = [];
+          snapshot.forEach((d) => {
+            const data = d.data();
+            list.push({
+              id: d.id,
+              customerName: data.customerName || data.phone || "Customer",
+              customerPhone: data.customerPhone || data.phone || "",
+              pickupCity: data.pickupCity || data.pickup || "",
+              deliveryCity: data.deliveryCity || data.destination || "",
+              date: data.date || "",
+              vehicleType: data.vehicleType || "14ft Lorry",
+              packageDetails: data.packageDetails || data.notes || "",
+              status: data.status || "pending",
+              assignedLorryId: data.assignedLorryId,
+              assignedDriverName: data.assignedDriverName,
+              assignedDriverPhone: data.assignedDriverPhone,
+              assignedPlate: data.assignedPlate || data.assignedLorryPlate,
+              createdAt: data.createdAt || Date.now(),
+              updatedAt: data.updatedAt || Date.now(),
+            });
+          });
+          list.sort((a, b) => b.createdAt - a.createdAt);
+          callback(list);
+        }
+      },
+      (err) => {
+        console.warn("Bookings Firestore subscription warning:", err);
+      }
+    );
+  } catch {}
+
+  // Fallback initial API load
+  getAllBookings().then((initial) => {
+    if (isMounted && initial.length > 0) {
+      callback(initial);
+    }
+  });
+
+  return () => {
+    isMounted = false;
+    unsubscribeFs();
+  };
+}
+
 export async function updateBookingDispatch(input: {
   id: string;
   status: "pending" | "assigned" | "in_transit" | "delivered" | "cancelled";
@@ -421,6 +572,23 @@ export async function updateBookingDispatch(input: {
   assignedDriverPhone?: string;
   assignedPlate?: string;
 }): Promise<boolean> {
+  // 1. Direct Firestore update
+  try {
+    const docRef = doc(db, "bookings", input.id);
+    await setDoc(
+      docRef,
+      {
+        ...input,
+        assignedLorryPlate: input.assignedPlate,
+        updatedAt: Date.now(),
+      },
+      { merge: true }
+    );
+  } catch (e) {
+    console.warn("Firestore booking dispatch update notice:", e);
+  }
+
+  // 2. Notify API
   const res = await apiFetch("/api/bookings", {
     method: "PATCH",
     body: JSON.stringify(input),

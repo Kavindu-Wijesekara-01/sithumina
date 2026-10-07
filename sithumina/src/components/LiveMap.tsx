@@ -48,11 +48,17 @@ export const LiveMap: React.FC<LiveMapProps> = ({ className = "" }) => {
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setUserLocation([position.coords.latitude, position.coords.longitude]);
+        const lat = Number(position?.coords?.latitude);
+        const lng = Number(position?.coords?.longitude);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          setUserLocation([lat, lng]);
+        } else {
+          setUserLocation([6.9271, 79.8612]);
+        }
         setGpsLoading(false);
       },
       (error) => {
-        console.warn("Geolocation error:", error.message);
+        console.warn("Geolocation error:", error?.message);
         // Default fallback to Colombo center if permission denied/testing
         setUserLocation([6.9271, 79.8612]);
         setGpsLoading(false);
