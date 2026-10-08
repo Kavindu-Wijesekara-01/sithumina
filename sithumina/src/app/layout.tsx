@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Plus_Jakarta_Sans, Noto_Sans_Sinhala } from "next/font/google";
+import { Plus_Jakarta_Sans, Noto_Sans_Sinhala, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { AuthProvider } from "@/context/AuthContext";
@@ -15,7 +15,15 @@ const plusJakarta = Plus_Jakarta_Sans({
 const notoSinhala = Noto_Sans_Sinhala({
   variable: "--font-noto-sinhala",
   subsets: ["sinhala"],
-  weight: ["400", "500", "600", "700", "800"],
+  weight: ["400", "500", "600", "700", "800", "900"],
+  display: "swap",
+});
+
+const playfair = Playfair_Display({
+  variable: "--font-playfair",
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  style: ["italic", "normal"],
   display: "swap",
 });
 
@@ -58,11 +66,11 @@ export default function RootLayout({
       data-theme="light"
       style={{ colorScheme: "light" }}
       suppressHydrationWarning
-      className={`${plusJakarta.variable} ${notoSinhala.variable}`}
+      className={`${plusJakarta.variable} ${notoSinhala.variable} ${playfair.variable}`}
     >
       <body
         suppressHydrationWarning
-        className={`${plusJakarta.variable} ${notoSinhala.variable} antialiased bg-[var(--bg)] text-[var(--ink)] min-h-screen flex flex-col`}
+        className={`${plusJakarta.variable} ${notoSinhala.variable} ${playfair.variable} antialiased bg-[var(--bg)] text-[var(--ink)] min-h-screen flex flex-col`}
       >
         <LanguageProvider>
           <AuthProvider>

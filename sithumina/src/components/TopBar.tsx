@@ -37,13 +37,20 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenMobileMenu }) => {
               className="h-[50px] sm:h-[54px] w-auto object-contain flex-none drop-shadow-xs"
               priority
             />
-            <div className="flex flex-col items-center">
-              <h1 className="text-[28px] sm:text-[31px] font-black tracking-tight text-[#C51616] leading-none m-0">
-                සිතුමිණ ට්‍රාන්ස්පෝට්
+            <div className="flex flex-col items-stretch w-fit">
+              <h1
+                className="text-[32px] sm:text-[36px] font-black tracking-tight text-[#C51616] leading-none m-0 select-none text-center whitespace-nowrap"
+                style={{
+                  WebkitTextStroke: "1.2px #ffffff",
+                  paintOrder: "stroke fill",
+                  textShadow: "0 0 2px #ffffff, 0 1px 2px rgba(255,255,255,0.8)",
+                }}
+              >
+                සිතුමිණ ට්‍රාන්ස්පෝර්ට්
               </h1>
               <PhoneLinks
                 size="sm"
-                className="mt-1 w-full flex items-center justify-between"
+                className="mt-1.5 w-full flex items-center justify-between"
               />
             </div>
 
@@ -100,8 +107,15 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenMobileMenu }) => {
           {/* Sinhala Text (Top) & Phone numbers (Bottom, matching text width) */}
           <div className="flex flex-col justify-center flex-none">
             <Link href="/" className="no-underline select-none">
-              <h1 className="text-[16px] sm:text-[19px] font-black tracking-tight text-[#C51616] leading-tight m-0 whitespace-nowrap">
-                සිතුමිණ ට්‍රාන්ස්පෝට්
+              <h1
+                className="text-[17px] sm:text-[20px] font-black tracking-tight text-[#C51616] leading-tight m-0 whitespace-nowrap"
+                style={{
+                  WebkitTextStroke: "0.8px #ffffff",
+                  paintOrder: "stroke fill",
+                  textShadow: "0 0 1.5px rgba(255,255,255,0.9)",
+                }}
+              >
+                සිතුමිණ ට්‍රාන්ස්පෝර්ට්
               </h1>
             </Link>
             <PhoneLinks

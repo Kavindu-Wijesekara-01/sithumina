@@ -32,10 +32,10 @@ export const PhoneLinks: React.FC<PhoneLinksProps> = ({
     <div
       className={`flex items-center ${
         isXs
-          ? "text-[9.5px] font-bold"
+          ? "text-[10.5px] font-black"
           : isSm
-          ? "text-[10.5px] font-bold"
-          : "justify-center gap-4 text-[12.5px] font-bold"
+          ? "text-[12.5px] sm:text-[13px] font-black tracking-tight"
+          : "justify-center gap-4 text-[13px] font-black"
       } text-[#26231B] ${className}`}
     >
       {phones.map((phone, idx) => (
@@ -46,22 +46,22 @@ export const PhoneLinks: React.FC<PhoneLinksProps> = ({
           rel={phone.type === "whatsapp" ? "noopener noreferrer" : undefined}
           className={`inline-flex items-center ${
             isXs
-              ? "gap-1 text-[9.5px]"
-              : isSm
               ? "gap-1 text-[10.5px]"
-              : "gap-1.5 text-[12.5px]"
-          } text-[#26231B] no-underline hover:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-[#26231B] rounded whitespace-nowrap ${itemClassName}`}
+              : isSm
+              ? "gap-1 text-[12.5px] sm:text-[13px]"
+              : "gap-1.5 text-[13px]"
+          } text-[#26231B] font-black no-underline hover:text-[#C51616] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#26231B] rounded whitespace-nowrap ${itemClassName}`}
           aria-label={`${phone.type === "whatsapp" ? "WhatsApp" : "Call"} ${phone.display}`}
         >
           {phone.type === "call" ? (
             <svg
               className={`${
-                isXs ? "w-2.5 h-2.5" : isSm ? "w-3 h-3" : "w-[15px] h-[15px]"
+                isXs ? "w-2.5 h-2.5" : isSm ? "w-3.5 h-3.5" : "w-[15px] h-[15px]"
               } text-[#26231B] flex-none`}
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              strokeWidth="2.2"
+              strokeWidth="2.5"
               strokeLinecap="round"
               strokeLinejoin="round"
               aria-hidden="true"
@@ -71,7 +71,7 @@ export const PhoneLinks: React.FC<PhoneLinksProps> = ({
           ) : (
             <svg
               className={`${
-                isXs ? "w-2.5 h-2.5" : isSm ? "w-3 h-3" : "w-[15px] h-[15px]"
+                isXs ? "w-2.5 h-2.5" : isSm ? "w-3.5 h-3.5" : "w-[15px] h-[15px]"
               } fill-[#128C4A] flex-none`}
               viewBox="0 0 24 24"
               aria-hidden="true"
