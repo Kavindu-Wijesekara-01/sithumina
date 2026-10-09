@@ -355,17 +355,26 @@ export async function updateLorryGpsLocation(
   lat: number,
   lng: number,
   heading: number = 0,
-  speedKmH: number = 0
+  speedKmH: number = 0,
+  extra?: Partial<LorryRecord>
 ): Promise<void> {
+  const payload = {
+    id: lorryId,
+    lat,
+    lng,
+    heading: Math.round(heading) || 0,
+    speedKmH: Math.round(speedKmH) || 0,
+    lastUpdated: "Just now",
+    updatedAt: Date.now(),
+    isLive: true,
+    isOnline: true,
+    ...(extra || {}),
+  };
+
   // 1. Broadcast to Central Web Platform API (/api/lorries/[id]/location)
   apiFetch(`/api/lorries/${encodeURIComponent(lorryId)}/location`, {
     method: "POST",
-    body: JSON.stringify({
-      lat,
-      lng,
-      heading,
-      speedKmH,
-    }),
+    body: JSON.stringify(payload),
   }).catch((e) => console.warn("API GPS sync notice:", e));
 
   // 2. Fire and forget to Firestore with timeout
@@ -375,20 +384,31 @@ export async function updateLorryGpsLocation(
     );
     const firestorePromise = setDoc(
       doc(db, "lorries", lorryId),
-      {
-        lat,
-        lng,
-        heading: Math.round(heading) || 0,
-        speedKmH: Math.round(speedKmH) || 0,
-        lastUpdated: "Just now",
-        updatedAt: Date.now(),
-      },
+      payload,
       { merge: true }
     );
     await Promise.race([firestorePromise, timeoutPromise]);
   } catch {
     // Handled by central API
   }
+}
+
+/**
+ * Stop live broadcasting in Firestore for a lorry
+ */
+export async function stopLorryLiveBroadcasting(lorryId: string): Promise<void> {
+  try {
+    await setDoc(
+      doc(db, "lorries", lorryId),
+      {
+        isLive: false,
+        isOnline: false,
+        lastUpdated: "Offline",
+        updatedAt: Date.now(),
+      },
+      { merge: true }
+    );
+  } catch {}
 }
 
 /**
@@ -420,6 +440,8 @@ export interface LiveTripDetails {
   lorryId: string;
   driverId: string;
   driverName: string;
+  driverPhone?: string;
+  vehicleType?: string;
   plate: string;
   status: "empty" | "on_trip";
   startLocation: string;
@@ -440,6 +462,7 @@ export interface LiveTripDetails {
   speedKmH?: number;
   heading?: number;
   isLive: boolean;
+  isOnline?: boolean;
   updatedAt: number;
 }
 
@@ -455,10 +478,21 @@ export async function updateLorryLiveTripDetails(
       ? `${trip.startLocation} → ${trip.endLocation}`
       : trip.travelRoute || "Island-wide Fleet";
 
+  const payload = {
+    ...trip,
+    id: trip.lorryId,
+    route: summaryRoute,
+    status: trip.status,
+    isLive: true,
+    isOnline: true,
+    lastUpdated: "Just now",
+    updatedAt: Date.now(),
+  };
+
   // 1. Sync to central API
   apiFetch(`/api/lorries/${encodeURIComponent(trip.lorryId)}/trip`, {
     method: "POST",
-    body: JSON.stringify({ ...trip, route: summaryRoute }),
+    body: JSON.stringify(payload),
   }).catch(() => {});
 
   // 2. Sync to Firestore with timeout protection
@@ -468,13 +502,7 @@ export async function updateLorryLiveTripDetails(
     );
     const firestorePromise = setDoc(
       doc(db, "lorries", trip.lorryId),
-      {
-        ...trip,
-        route: summaryRoute,
-        status: trip.status,
-        lastUpdated: "Live tracking active",
-        updatedAt: Date.now(),
-      },
+      payload,
       { merge: true }
     );
     await Promise.race([firestorePromise, timeoutPromise]);
@@ -510,6 +538,8 @@ export interface LorryRecord {
   availableCapacityKg?: string;
   hasFreezer?: boolean;
   hasHelper?: boolean;
+  isOnline?: boolean;
+  isLive?: boolean;
 }
 
 export interface CustomerRecord {
@@ -618,6 +648,8 @@ export function subscribeAdminLorries(
               status: (data.status as "empty" | "on_trip") || "empty",
               lastUpdated: data.lastUpdated || "Just now",
               updatedAt: data.updatedAt || Date.now(),
+              isOnline: data.isOnline ?? data.isLive ?? true,
+              isLive: data.isLive ?? true,
               startLocation: data.startLocation || "",
               endLocation: data.endLocation || "",
               travelRoute: data.travelRoute || "",

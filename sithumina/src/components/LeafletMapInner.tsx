@@ -176,35 +176,96 @@ export const LeafletMapInner: React.FC<LeafletMapInnerProps> = ({
             }}
           >
             <Popup className="sithumina-popup">
-              <div className="p-1.5 flex flex-col gap-1 min-w-[150px] font-sans">
-                <div className="flex items-center justify-between gap-2 border-b border-[#E7E2D0] pb-1">
-                  <span className="font-extrabold text-[13px] text-[#26231B]">
+              <div className="p-2 flex flex-col gap-1.5 min-w-[210px] max-w-[280px] font-sans">
+                {/* Header: Plate & Status Badge */}
+                <div className="flex items-center justify-between gap-2 border-b border-[#E7E2D0] pb-1.5">
+                  <span className="font-black text-[14px] text-[#26231B] tracking-wide">
                     {lorry.plate}
                   </span>
                   <LorryStatusBadge status={lorry.status} />
                 </div>
-                <div className="text-[11.5px] text-[#6F6A5A] flex flex-col gap-0.5">
-                  <div>
-                    <span className="font-semibold text-[#26231B]">Route:</span>{" "}
-                    {lorry.route}
+
+                {/* Driver Info & Phone */}
+                <div className="flex items-center justify-between bg-[#F4F2EA] px-2 py-1 rounded-[6px]">
+                  <div className="text-[11.5px] text-[#26231B]">
+                    <span className="text-[#6F6A5A]">Driver: </span>
+                    <b>{lorry.driverName || "Registered Driver"}</b>
                   </div>
-                  {lorry.driverName && (
-                    <div>
-                      <span className="font-semibold text-[#26231B]">Driver:</span>{" "}
-                      {lorry.driverName}
+                  {lorry.driverPhone ? (
+                    <a
+                      href={`tel:${lorry.driverPhone.replace(/\s+/g, "")}`}
+                      className="text-[11px] font-extrabold text-[#1E9E5A] bg-white px-2 py-0.5 rounded border border-[#1E9E5A] hover:bg-[#1E9E5A] hover:text-white transition-colors"
+                      title="Call Driver"
+                    >
+                      📞 Call
+                    </a>
+                  ) : null}
+                </div>
+
+                {/* Route & Destination */}
+                <div className="text-[11.5px] text-[#26231B] flex flex-col gap-1">
+                  <div>
+                    <span className="text-[#6F6A5A] font-medium">Route: </span>
+                    <span className="font-bold">{lorry.route}</span>
+                  </div>
+
+                  {/* Loaded Trip Details */}
+                  {lorry.status === "on_trip" ? (
+                    <div className="bg-[#FFF9E6] border border-[#FFE08A] rounded-[6px] p-1.5 flex flex-col gap-0.5 text-[11px]">
+                      {lorry.startLocation && (
+                        <div>
+                          <span className="text-[#7A6200] font-semibold">Start:</span>{" "}
+                          <b>{lorry.startLocation}</b>
+                        </div>
+                      )}
+                      {lorry.endLocation && (
+                        <div>
+                          <span className="text-[#7A6200] font-semibold">Destination:</span>{" "}
+                          <b>{lorry.endLocation}</b>
+                        </div>
+                      )}
+                      {lorry.emptyTime && (
+                        <div>
+                          <span className="text-[#7A6200] font-semibold">Est. Empty:</span>{" "}
+                          <b className="text-[#B36200]">{lorry.emptyTime}</b>
+                        </div>
+                      )}
+                      {lorry.returnRoute && (
+                        <div>
+                          <span className="text-[#7A6200] font-semibold">Return:</span>{" "}
+                          <b>{lorry.returnRoute}</b>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* Empty Vehicle Availability Details */
+                    <div className="bg-[#EBF7EE] border border-[#BDE8C8] rounded-[6px] p-1.5 flex flex-col gap-1 text-[11px]">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#137333]">Space: <b>{lorry.availableSpace || "Full Space"}</b></span>
+                        <span className="text-[#137333]">Cap: <b>{lorry.availableCapacityKg || "3,000 Kg"}</b></span>
+                      </div>
+                      <div className="flex flex-wrap gap-1 mt-0.5">
+                        {lorry.hasFreezer && (
+                          <span className="bg-[#137333] text-white text-[9.5px] font-bold px-1.5 py-0.5 rounded">
+                            ❄️ Freezer
+                          </span>
+                        )}
+                        {lorry.hasHelper && (
+                          <span className="bg-[#137333] text-white text-[9.5px] font-bold px-1.5 py-0.5 rounded">
+                            👷 Helper
+                          </span>
+                        )}
+                      </div>
                     </div>
                   )}
-                  {lorry.vehicleType && (
-                    <div>
-                      <span className="font-semibold text-[#26231B]">Vehicle:</span>{" "}
-                      {lorry.vehicleType}
-                    </div>
-                  )}
-                  {lorry.speedKmH !== undefined && (
-                    <div className="text-[10.5px] mt-1 text-[#1E9E5A] font-bold">
-                      ● Moving at {lorry.speedKmH} km/h
-                    </div>
-                  )}
+
+                  {/* Live Speed / Telemetry */}
+                  <div className="flex items-center justify-between text-[10.5px] text-[#6F6A5A] pt-1 border-t border-[#E7E2D0]">
+                    <span className="text-[#1E9E5A] font-bold">
+                      ● {lorry.speedKmH && lorry.speedKmH > 0 ? `Moving: ${lorry.speedKmH} km/h` : "Live GPS Active"}
+                    </span>
+                    <span className="text-[10px]">{lorry.lastUpdated || "Live"}</span>
+                  </div>
                 </div>
               </div>
             </Popup>

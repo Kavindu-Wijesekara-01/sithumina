@@ -32,6 +32,10 @@ export interface AppBanner {
   subtitle: string;
   tag: string;
   target: "all" | "riders" | "customers";
+  viewMode?: "all" | "mobile" | "desktop";
+  desktopImage?: string;
+  mobileImage?: string;
+  ctaText?: string;
   isActive: boolean;
   createdAt: number;
 }
@@ -205,7 +209,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   const [bannerSub, setBannerSub] = useState("");
   const [bannerTag, setBannerTag] = useState("PROMO");
   const [bannerTarget, setBannerTarget] = useState<"all" | "riders" | "customers">("all");
+  const [bannerViewMode, setBannerViewMode] = useState<"all" | "mobile" | "desktop">("all");
+  const [bannerDesktopImg, setBannerDesktopImg] = useState("");
+  const [bannerMobileImg, setBannerMobileImg] = useState("");
+  const [bannerCtaText, setBannerCtaText] = useState("Book Now");
   const [bannerActive, setBannerActive] = useState(true);
+
+  // Live preview toggle inside Add Banner modal:
+  const [bannerPreviewDevice, setBannerPreviewDevice] = useState<"mobile" | "desktop">("mobile");
+
+  // Standalone Banner Inspection / Preview modal:
+  const [inspectBannerModal, setInspectBannerModal] = useState(false);
+  const [selectedBannerForInspect, setSelectedBannerForInspect] = useState<AppBanner | null>(null);
+  const [inspectPreviewDevice, setInspectPreviewDevice] = useState<"mobile" | "desktop">("mobile");
 
   // Load saved banners on mount
   useEffect(() => {
@@ -232,6 +248,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
       subtitle: bannerSub.trim(),
       tag: bannerTag.trim().toUpperCase() || "PROMO",
       target: bannerTarget,
+      viewMode: bannerViewMode,
+      desktopImage: bannerDesktopImg.trim() || undefined,
+      mobileImage: bannerMobileImg.trim() || undefined,
+      ctaText: bannerCtaText.trim() || "Book Now",
       isActive: bannerActive,
       createdAt: Date.now(),
     };
@@ -242,6 +262,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     setBannerTitle("");
     setBannerSub("");
     setBannerTag("PROMO");
+    setBannerDesktopImg("");
+    setBannerMobileImg("");
+    setBannerCtaText("Book Now");
     showToast("Banner added successfully!");
   };
 
@@ -284,42 +307,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   // Real-time Firestore subscription: Live GPS broadcasted from mobile drivers
   useEffect(() => {
     const unsubscribe = subscribeAdminLorries((firestoreLorries) => {
-      if (firestoreLorries && firestoreLorries.length > 0) {
-        setLorries((prev) => {
-          const updated = [...prev];
-          firestoreLorries.forEach((fl) => {
-            const idx = updated.findIndex((u) => u.plate === fl.plate || u.id === fl.id);
-            const mapped: LiveMapLorry = {
-              id: fl.id,
-              plate: fl.plate || "WP LK-XXXX",
-              route: fl.route || "Live Route",
-              driverName: fl.driverName || "Driver",
-              driverPhone: fl.driverPhone || "",
-              status: fl.status === "on_trip" ? "On trip" : "Empty",
-              lat: fl.lat || 6.9271,
-              lng: fl.lng || 79.8612,
-              speedKmH: fl.speedKmH || 0,
-              heading: fl.heading || 0,
-              isOnline: true,
-              startLocation: fl.startLocation || "",
-              endLocation: fl.endLocation || "",
-              travelRoute: fl.travelRoute || "",
-              emptyTime: fl.emptyTime || "",
-              returnRoute: fl.returnRoute || "",
-              finalDestination: fl.finalDestination || "",
-              availableSpace: fl.availableSpace || "",
-              availableCapacityKg: fl.availableCapacityKg || "",
-              hasFreezer: !!fl.hasFreezer,
-              hasHelper: !!fl.hasHelper,
-            };
-            if (idx >= 0) {
-              updated[idx] = mapped;
-            } else {
-              updated.push(mapped);
-            }
-          });
-          return updated;
-        });
+      if (firestoreLorries) {
+        const mappedList: LiveMapLorry[] = firestoreLorries.map((fl) => ({
+          id: fl.id,
+          plate: fl.plate || "WP LK-XXXX",
+          route:
+            fl.route ||
+            (fl.startLocation && fl.endLocation
+              ? `${fl.startLocation} → ${fl.endLocation}`
+              : "Island-wide"),
+          driverName: fl.driverName || "Driver",
+          driverPhone: fl.driverPhone || "",
+          status: fl.status === "on_trip" ? "On trip" : "Empty",
+          lat: fl.lat || 6.9271,
+          lng: fl.lng || 79.8612,
+          speedKmH: fl.speedKmH || 0,
+          heading: fl.heading || 0,
+          isOnline: fl.isOnline ?? fl.isLive ?? true,
+          startLocation: fl.startLocation || "",
+          endLocation: fl.endLocation || "",
+          travelRoute: fl.travelRoute || "",
+          emptyTime: fl.emptyTime || "",
+          returnRoute: fl.returnRoute || "",
+          finalDestination: fl.finalDestination || "",
+          availableSpace: fl.availableSpace || "",
+          availableCapacityKg: fl.availableCapacityKg || "",
+          hasFreezer: !!fl.hasFreezer,
+          hasHelper: !!fl.hasHelper,
+        }));
+        setLorries(mappedList);
       }
     });
 
@@ -1279,6 +1295,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                 : "👤 Customers Only"}
                             </Text>
                           </View>
+                          <View
+                            style={[
+                              styles.bannerViewModeBadge,
+                              b.viewMode === "mobile"
+                                ? styles.viewModeMobileBadge
+                                : b.viewMode === "desktop"
+                                ? styles.viewModeDesktopBadge
+                                : styles.viewModeAllBadge,
+                            ]}
+                          >
+                            <Text style={styles.bannerViewModeBadgeText}>
+                              {b.viewMode === "mobile"
+                                ? "📱 Mobile View"
+                                : b.viewMode === "desktop"
+                                ? "💻 Desktop View"
+                                : "🌐 All Devices"}
+                            </Text>
+                          </View>
                         </View>
                         <TouchableOpacity
                           style={[
@@ -1307,12 +1341,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                         <Text style={styles.bannerDateText}>
                           Created {new Date(b.createdAt).toLocaleDateString()}
                         </Text>
-                        <TouchableOpacity
-                          style={styles.deleteBannerBtn}
-                          onPress={() => handleDeleteBanner(b.id)}
-                        >
-                          <Text style={styles.deleteBannerBtnText}>🗑 Delete</Text>
-                        </TouchableOpacity>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                          <TouchableOpacity
+                            style={styles.previewInspectBtn}
+                            onPress={() => {
+                              setSelectedBannerForInspect(b);
+                              setInspectPreviewDevice(b.viewMode === "desktop" ? "desktop" : "mobile");
+                              setInspectBannerModal(true);
+                            }}
+                          >
+                            <Text style={styles.previewInspectBtnText}>👁️ Preview</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.deleteBannerBtn}
+                            onPress={() => handleDeleteBanner(b.id)}
+                          >
+                            <Text style={styles.deleteBannerBtnText}>🗑 Delete</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     </View>
                   ))}
@@ -1463,86 +1509,481 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         </View>
       </Modal>
 
-      {/* MODAL: ADD BANNER */}
+      {/* MODAL: ADD BANNER WITH MOBILE & DESKTOP VIEW OPTIONS */}
       <Modal visible={addBannerModal} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
-            <Text style={styles.modalTitle}>Add New Banner</Text>
-            <Text style={styles.modalSubtitle}>Create a promotion or announcement banner</Text>
+          <View style={[styles.modalSheet, { maxHeight: "90%" }]}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <View>
+                <Text style={styles.modalTitle}>Add New Banner</Text>
+                <Text style={styles.modalSubtitle}>Create mobile and desktop web banners</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setAddBannerModal(false)}
+                style={{ padding: 6 }}
+              >
+                <Text style={{ fontSize: 18, color: "#6F6A5A", fontWeight: "800" }}>✕</Text>
+              </TouchableOpacity>
+            </View>
 
-            <Text style={styles.inputLabel}>Banner Title *</Text>
-            <TextInput
-              style={styles.formInput}
-              placeholder="e.g. Special Discount for Kandy Trips"
-              placeholderTextColor="#8C877A"
-              value={bannerTitle}
-              onChangeText={setBannerTitle}
-            />
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingBottom: 20 }}>
+              <Text style={styles.inputLabel}>Banner Title *</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="e.g. Special Discount for Kandy Cargo Trips"
+                placeholderTextColor="#8C877A"
+                value={bannerTitle}
+                onChangeText={setBannerTitle}
+              />
 
-            <Text style={styles.inputLabel}>Subtitle / Description</Text>
-            <TextInput
-              style={styles.formInput}
-              placeholder="e.g. Save 10% on cargo hires this week"
-              placeholderTextColor="#8C877A"
-              value={bannerSub}
-              onChangeText={setBannerSub}
-            />
+              <Text style={styles.inputLabel}>Subtitle / Description</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="e.g. Save 10% on cargo hires this week"
+                placeholderTextColor="#8C877A"
+                value={bannerSub}
+                onChangeText={setBannerSub}
+              />
 
-            <Text style={styles.inputLabel}>Tag / Category</Text>
-            <TextInput
-              style={styles.formInput}
-              placeholder="PROMO / NOTICE / NEW / ALERT"
-              placeholderTextColor="#8C877A"
-              value={bannerTag}
-              onChangeText={setBannerTag}
-            />
+              <Text style={styles.inputLabel}>Tag / Category</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="PROMO / NOTICE / NEW / HOT DEAL"
+                placeholderTextColor="#8C877A"
+                value={bannerTag}
+                onChangeText={setBannerTag}
+              />
 
-            <Text style={styles.inputLabel}>Target Audience</Text>
-            <View style={styles.audienceRow}>
-              {(["all", "riders", "customers"] as const).map((aud) => (
+              {/* TARGET AUDIENCE */}
+              <Text style={styles.inputLabel}>Target Audience</Text>
+              <View style={styles.audienceRow}>
+                {(["all", "riders", "customers"] as const).map((aud) => (
+                  <TouchableOpacity
+                    key={aud}
+                    style={[
+                      styles.audiencePill,
+                      bannerTarget === aud && styles.audiencePillActive,
+                    ]}
+                    onPress={() => setBannerTarget(aud)}
+                  >
+                    <Text
+                      style={[
+                        styles.audiencePillText,
+                        bannerTarget === aud && styles.audiencePillTextActive,
+                      ]}
+                    >
+                      {aud === "all" ? "👥 All" : aud === "riders" ? "🚚 Riders" : "👤 Customers"}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* VIEW MODE OPTION: MOBILE VIEW VS DESKTOP VIEW */}
+              <Text style={styles.inputLabel}>Target Device View Format</Text>
+              <View style={styles.deviceModeRow}>
                 <TouchableOpacity
-                  key={aud}
                   style={[
-                    styles.audiencePill,
-                    bannerTarget === aud && styles.audiencePillActive,
+                    styles.deviceModePill,
+                    bannerViewMode === "all" && styles.deviceModePillActive,
                   ]}
-                  onPress={() => setBannerTarget(aud)}
+                  onPress={() => setBannerViewMode("all")}
                 >
                   <Text
                     style={[
-                      styles.audiencePillText,
-                      bannerTarget === aud && styles.audiencePillTextActive,
+                      styles.deviceModePillText,
+                      bannerViewMode === "all" && styles.deviceModePillTextActive,
                     ]}
                   >
-                    {aud === "all" ? "👥 All" : aud === "riders" ? "🚚 Riders" : "👤 Customers"}
+                    🌐 All Devices
                   </Text>
                 </TouchableOpacity>
-              ))}
-            </View>
 
-            {/* Live Preview Card */}
-            <Text style={styles.inputLabel}>Live Preview</Text>
-            <View style={styles.bannerPreviewCard}>
-              <View style={styles.previewTagBadge}>
-                <Text style={styles.previewTagText}>{bannerTag || "PROMO"}</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.deviceModePill,
+                    bannerViewMode === "mobile" && styles.deviceModePillActive,
+                  ]}
+                  onPress={() => {
+                    setBannerViewMode("mobile");
+                    setBannerPreviewDevice("mobile");
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.deviceModePillText,
+                      bannerViewMode === "mobile" && styles.deviceModePillTextActive,
+                    ]}
+                  >
+                    📱 Mobile View
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.deviceModePill,
+                    bannerViewMode === "desktop" && styles.deviceModePillActive,
+                  ]}
+                  onPress={() => {
+                    setBannerViewMode("desktop");
+                    setBannerPreviewDevice("desktop");
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.deviceModePillText,
+                      bannerViewMode === "desktop" && styles.deviceModePillTextActive,
+                    ]}
+                  >
+                    💻 Desktop View
+                  </Text>
+                </TouchableOpacity>
               </View>
-              <Text style={styles.previewTitleText}>
-                {bannerTitle || "Your Banner Title Here"}
-              </Text>
-              <Text style={styles.previewSubText}>
-                {bannerSub || "Banner subtitle and details will be displayed here"}
-              </Text>
+
+              {/* IMAGE URLS & PRESETS */}
+              <Text style={styles.inputLabel}>Desktop Banner Image (16:9 Widescreen)</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="/banner-desktop.jpg or https://..."
+                placeholderTextColor="#8C877A"
+                value={bannerDesktopImg}
+                onChangeText={setBannerDesktopImg}
+              />
+              <View style={styles.presetBtnsRow}>
+                <TouchableOpacity
+                  style={styles.presetBtn}
+                  onPress={() => setBannerDesktopImg("/banner-desktop.jpg")}
+                >
+                  <Text style={styles.presetBtnText}>⚡ /banner-desktop.jpg</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.presetBtn}
+                  onPress={() => setBannerDesktopImg("/banner.jpg")}
+                >
+                  <Text style={styles.presetBtnText}>⚡ /banner.jpg</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.inputLabel}>Mobile Banner Image (Vertical / Compact)</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="/banner-mobile.jpg or https://..."
+                placeholderTextColor="#8C877A"
+                value={bannerMobileImg}
+                onChangeText={setBannerMobileImg}
+              />
+              <View style={styles.presetBtnsRow}>
+                <TouchableOpacity
+                  style={styles.presetBtn}
+                  onPress={() => setBannerMobileImg("/banner-mobile.jpg")}
+                >
+                  <Text style={styles.presetBtnText}>⚡ /banner-mobile.jpg</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.presetBtn}
+                  onPress={() => setBannerMobileImg("/banner-mobile-2.jpg")}
+                >
+                  <Text style={styles.presetBtnText}>⚡ /banner-mobile-2.jpg</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.inputLabel}>Call To Action (CTA Button)</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="e.g. Book Now / Call 0755984984"
+                placeholderTextColor="#8C877A"
+                value={bannerCtaText}
+                onChangeText={setBannerCtaText}
+              />
+
+              {/* INTERACTIVE PREVIEW WITH MOBILE VIEW & DESKTOP VIEW SWITCHER */}
+              <View style={styles.previewHeaderRow}>
+                <Text style={styles.inputLabel}>Live Device Preview</Text>
+                <View style={styles.previewSwitcherPills}>
+                  <TouchableOpacity
+                    style={[
+                      styles.switcherTab,
+                      bannerPreviewDevice === "mobile" && styles.switcherTabActive,
+                    ]}
+                    onPress={() => setBannerPreviewDevice("mobile")}
+                  >
+                    <Text
+                      style={[
+                        styles.switcherTabText,
+                        bannerPreviewDevice === "mobile" && styles.switcherTabTextActive,
+                      ]}
+                    >
+                      📱 Mobile View
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.switcherTab,
+                      bannerPreviewDevice === "desktop" && styles.switcherTabActive,
+                    ]}
+                    onPress={() => setBannerPreviewDevice("desktop")}
+                  >
+                    <Text
+                      style={[
+                        styles.switcherTabText,
+                        bannerPreviewDevice === "desktop" && styles.switcherTabTextActive,
+                      ]}
+                    >
+                      💻 Desktop View
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* RENDER CHOSEN DEVICE PREVIEW */}
+              {bannerPreviewDevice === "mobile" ? (
+                /* 📱 MOBILE VIEW MOCKUP FRAME */
+                <View style={styles.phoneMockupFrame}>
+                  {/* Phone Status Bar & Notch */}
+                  <View style={styles.phoneTopBar}>
+                    <Text style={styles.phoneTimeText}>9:41</Text>
+                    <View style={styles.phoneDynamicIsland} />
+                    <Text style={styles.phoneStatusIcons}>5G 100%</Text>
+                  </View>
+
+                  {/* App Header Inside Phone */}
+                  <View style={styles.phoneAppHeader}>
+                    <Text style={styles.phoneAppTitle}>Sithumina Transport 🚚</Text>
+                    <View style={styles.phoneBadgeLive}>
+                      <Text style={styles.phoneBadgeLiveText}>LIVE</Text>
+                    </View>
+                  </View>
+
+                  {/* Mobile Banner Card Inside Phone */}
+                  <View style={styles.phoneBannerCard}>
+                    <View style={styles.phoneBannerTagRow}>
+                      <View style={styles.previewTagBadge}>
+                        <Text style={styles.previewTagText}>{bannerTag || "PROMO"}</Text>
+                      </View>
+                      <Text style={styles.phoneBannerFormatLabel}>📱 Mobile Header Banner</Text>
+                    </View>
+                    <Text style={styles.phoneBannerTitle}>
+                      {bannerTitle || "Special Cargo Promotion"}
+                    </Text>
+                    <Text style={styles.phoneBannerSub}>
+                      {bannerSub || "Fast & Reliable Island-wide Transport Service"}
+                    </Text>
+                    <View style={styles.phoneCtaBtn}>
+                      <Text style={styles.phoneCtaBtnText}>{bannerCtaText || "Book Now"} ➔</Text>
+                    </View>
+                    {bannerMobileImg ? (
+                      <Text style={styles.phoneAssetHint}>🖼️ Asset: {bannerMobileImg}</Text>
+                    ) : null}
+                  </View>
+
+                  {/* Phone Home Bar */}
+                  <View style={styles.phoneHomeBar} />
+                </View>
+              ) : (
+                /* 💻 DESKTOP VIEW MOCKUP FRAME */
+                <View style={styles.desktopMockupFrame}>
+                  {/* Browser Chrome Header */}
+                  <View style={styles.browserTopBar}>
+                    <View style={styles.browserDotsRow}>
+                      <View style={[styles.browserDot, { backgroundColor: "#FF5F56" }]} />
+                      <View style={[styles.browserDot, { backgroundColor: "#FFBD2E" }]} />
+                      <View style={[styles.browserDot, { backgroundColor: "#27C93F" }]} />
+                    </View>
+                    <View style={styles.browserAddressPill}>
+                      <Text style={styles.browserAddressText}>🔒 sithumina.lk/transport</Text>
+                    </View>
+                    <Text style={{ fontSize: 9, color: "#8C877A", fontWeight: "700" }}>DESKTOP</Text>
+                  </View>
+
+                  {/* Desktop Widescreen Hero Banner */}
+                  <View style={styles.desktopBannerContainer}>
+                    <View style={styles.desktopBannerContentCol}>
+                      <View style={styles.previewTagBadge}>
+                        <Text style={styles.previewTagText}>{bannerTag || "PROMO"}</Text>
+                      </View>
+                      <Text style={styles.desktopBannerTitle}>
+                        {bannerTitle || "Reliable Heavy Transport Across Sri Lanka"}
+                      </Text>
+                      <Text style={styles.desktopBannerSub}>
+                        {bannerSub || "Colombo • Kandy • Galle • Anuradhapura • Island-wide Fleet"}
+                      </Text>
+                      <View style={styles.desktopCtaRow}>
+                        <View style={styles.desktopCtaBtn}>
+                          <Text style={styles.desktopCtaBtnText}>{bannerCtaText || "Book Vehicle Now"} ➔</Text>
+                        </View>
+                        <Text style={styles.desktopHotlineText}>📞 075 598 4984</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.desktopFleetBadgeBox}>
+                      <Text style={{ fontSize: 24, textAlign: "center" }}>🚚</Text>
+                      <Text style={styles.desktopFleetBadgeTitle}>10ft • 14ft • 20ft</Text>
+                      <Text style={styles.desktopFleetBadgeSub}>Available 24/7</Text>
+                    </View>
+                  </View>
+                  {bannerDesktopImg ? (
+                    <Text style={styles.desktopAssetHint}>🖼️ Desktop Asset: {bannerDesktopImg}</Text>
+                  ) : null}
+                </View>
+              )}
+
+              <TouchableOpacity style={styles.saveBtn} onPress={handleSaveBanner}>
+                <Text style={styles.saveBtnText}>Save & Publish Banner</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setAddBannerModal(false)}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL: STANDALONE BANNER INSPECTOR (MOBILE VIEW / DESKTOP VIEW) */}
+      <Modal visible={inspectBannerModal} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalSheet, { maxHeight: "90%" }]}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <View>
+                <Text style={styles.modalTitle}>Banner Device Inspector</Text>
+                <Text style={styles.modalSubtitle}>Preview on Mobile Screen vs Desktop Screen</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setInspectBannerModal(false)}
+                style={{ padding: 6 }}
+              >
+                <Text style={{ fontSize: 18, color: "#6F6A5A", fontWeight: "800" }}>✕</Text>
+              </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSaveBanner}>
-              <Text style={styles.saveBtnText}>Save & Publish Banner</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.cancelBtn}
-              onPress={() => setAddBannerModal(false)}
-            >
-              <Text style={styles.cancelBtnText}>Cancel</Text>
-            </TouchableOpacity>
+            {selectedBannerForInspect && (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 20 }}>
+                {/* Switcher Pill */}
+                <View style={styles.previewSwitcherPills}>
+                  <TouchableOpacity
+                    style={[
+                      styles.switcherTab,
+                      inspectPreviewDevice === "mobile" && styles.switcherTabActive,
+                    ]}
+                    onPress={() => setInspectPreviewDevice("mobile")}
+                  >
+                    <Text
+                      style={[
+                        styles.switcherTabText,
+                        inspectPreviewDevice === "mobile" && styles.switcherTabTextActive,
+                      ]}
+                    >
+                      📱 Mobile View
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.switcherTab,
+                      inspectPreviewDevice === "desktop" && styles.switcherTabActive,
+                    ]}
+                    onPress={() => setInspectPreviewDevice("desktop")}
+                  >
+                    <Text
+                      style={[
+                        styles.switcherTabText,
+                        inspectPreviewDevice === "desktop" && styles.switcherTabTextActive,
+                      ]}
+                    >
+                      💻 Desktop View
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {inspectPreviewDevice === "mobile" ? (
+                  /* 📱 MOBILE VIEW */
+                  <View style={styles.phoneMockupFrame}>
+                    <View style={styles.phoneTopBar}>
+                      <Text style={styles.phoneTimeText}>9:41</Text>
+                      <View style={styles.phoneDynamicIsland} />
+                      <Text style={styles.phoneStatusIcons}>5G 100%</Text>
+                    </View>
+
+                    <View style={styles.phoneAppHeader}>
+                      <Text style={styles.phoneAppTitle}>Sithumina Transport 🚚</Text>
+                      <View style={styles.phoneBadgeLive}>
+                        <Text style={styles.phoneBadgeLiveText}>LIVE</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.phoneBannerCard}>
+                      <View style={styles.phoneBannerTagRow}>
+                        <View style={styles.previewTagBadge}>
+                          <Text style={styles.previewTagText}>{selectedBannerForInspect.tag}</Text>
+                        </View>
+                        <Text style={styles.phoneBannerFormatLabel}>📱 Mobile App Banner</Text>
+                      </View>
+                      <Text style={styles.phoneBannerTitle}>{selectedBannerForInspect.title}</Text>
+                      {selectedBannerForInspect.subtitle ? (
+                        <Text style={styles.phoneBannerSub}>{selectedBannerForInspect.subtitle}</Text>
+                      ) : null}
+                      <View style={styles.phoneCtaBtn}>
+                        <Text style={styles.phoneCtaBtnText}>{selectedBannerForInspect.ctaText || "Book Now"} ➔</Text>
+                      </View>
+                      {selectedBannerForInspect.mobileImage ? (
+                        <Text style={styles.phoneAssetHint}>🖼️ Asset: {selectedBannerForInspect.mobileImage}</Text>
+                      ) : null}
+                    </View>
+
+                    <View style={styles.phoneHomeBar} />
+                  </View>
+                ) : (
+                  /* 💻 DESKTOP VIEW */
+                  <View style={styles.desktopMockupFrame}>
+                    <View style={styles.browserTopBar}>
+                      <View style={styles.browserDotsRow}>
+                        <View style={[styles.browserDot, { backgroundColor: "#FF5F56" }]} />
+                        <View style={[styles.browserDot, { backgroundColor: "#FFBD2E" }]} />
+                        <View style={[styles.browserDot, { backgroundColor: "#27C93F" }]} />
+                      </View>
+                      <View style={styles.browserAddressPill}>
+                        <Text style={styles.browserAddressText}>🔒 sithumina.lk/transport</Text>
+                      </View>
+                      <Text style={{ fontSize: 9, color: "#8C877A", fontWeight: "700" }}>DESKTOP</Text>
+                    </View>
+
+                    <View style={styles.desktopBannerContainer}>
+                      <View style={styles.desktopBannerContentCol}>
+                        <View style={styles.previewTagBadge}>
+                          <Text style={styles.previewTagText}>{selectedBannerForInspect.tag}</Text>
+                        </View>
+                        <Text style={styles.desktopBannerTitle}>{selectedBannerForInspect.title}</Text>
+                        {selectedBannerForInspect.subtitle ? (
+                          <Text style={styles.desktopBannerSub}>{selectedBannerForInspect.subtitle}</Text>
+                        ) : null}
+                        <View style={styles.desktopCtaRow}>
+                          <View style={styles.desktopCtaBtn}>
+                            <Text style={styles.desktopCtaBtnText}>{selectedBannerForInspect.ctaText || "Book Vehicle Now"} ➔</Text>
+                          </View>
+                          <Text style={styles.desktopHotlineText}>📞 075 598 4984</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.desktopFleetBadgeBox}>
+                        <Text style={{ fontSize: 24, textAlign: "center" }}>🚚</Text>
+                        <Text style={styles.desktopFleetBadgeTitle}>10ft • 14ft • 20ft</Text>
+                        <Text style={styles.desktopFleetBadgeSub}>Available 24/7</Text>
+                      </View>
+                    </View>
+                    {selectedBannerForInspect.desktopImage ? (
+                      <Text style={styles.desktopAssetHint}>🖼️ Desktop Asset: {selectedBannerForInspect.desktopImage}</Text>
+                    ) : null}
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={[styles.saveBtn, { backgroundColor: "#26231B" }]}
+                  onPress={() => setInspectBannerModal(false)}
+                >
+                  <Text style={[styles.saveBtnText, { color: "#FFC20E" }]}>Close Preview</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            )}
           </View>
         </View>
       </Modal>
@@ -2866,5 +3307,370 @@ const styles = StyleSheet.create({
     color: "#FFC20E",
     fontWeight: "800",
     fontSize: 13,
+  },
+
+  /* Device View Badges & Action Buttons */
+  bannerViewModeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  viewModeMobileBadge: {
+    backgroundColor: "#E0F2FE",
+  },
+  viewModeDesktopBadge: {
+    backgroundColor: "#FEF3C7",
+  },
+  viewModeAllBadge: {
+    backgroundColor: "#DDF3E7",
+  },
+  bannerViewModeBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#26231B",
+  },
+  previewInspectBtn: {
+    backgroundColor: "#F4F2EA",
+    borderWidth: 1,
+    borderColor: "#DCD6C4",
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+  },
+  previewInspectBtnText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#26231B",
+  },
+
+  /* Device Mode Form Selector */
+  deviceModeRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 6,
+  },
+  deviceModePill: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: "#F4F2EA",
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: "transparent",
+  },
+  deviceModePillActive: {
+    borderColor: "#FFC20E",
+    backgroundColor: "#FFF6D6",
+  },
+  deviceModePillText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#6F6A5A",
+  },
+  deviceModePillTextActive: {
+    color: "#26231B",
+    fontWeight: "900",
+  },
+
+  /* Preset Image Buttons */
+  presetBtnsRow: {
+    flexDirection: "row",
+    gap: 6,
+    flexWrap: "wrap",
+    marginTop: -4,
+    marginBottom: 6,
+  },
+  presetBtn: {
+    backgroundColor: "#F4F2EA",
+    paddingVertical: 5,
+    paddingHorizontal: 9,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#E7E2D0",
+  },
+  presetBtnText: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: "#7A6200",
+  },
+
+  /* Preview Header & Switcher */
+  previewHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  previewSwitcherPills: {
+    flexDirection: "row",
+    backgroundColor: "#E7E2D0",
+    borderRadius: 10,
+    padding: 3,
+    gap: 4,
+  },
+  switcherTab: {
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  switcherTabActive: {
+    backgroundColor: "#FFC20E",
+  },
+  switcherTabText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#6F6A5A",
+  },
+  switcherTabTextActive: {
+    color: "#26231B",
+    fontWeight: "900",
+  },
+
+  /* 📱 Smartphone Mockup Frame */
+  phoneMockupFrame: {
+    backgroundColor: "#161512",
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: "#3D392B",
+    padding: 12,
+    paddingTop: 8,
+    paddingBottom: 10,
+    width: "100%",
+    maxWidth: 320,
+    alignSelf: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+    marginVertical: 4,
+  },
+  phoneTopBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  phoneTimeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  phoneDynamicIsland: {
+    width: 50,
+    height: 12,
+    backgroundColor: "#000000",
+    borderRadius: 6,
+  },
+  phoneStatusIcons: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#B2AB92",
+  },
+  phoneAppHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.08)",
+    marginBottom: 8,
+  },
+  phoneAppTitle: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: "#FFFFFF",
+  },
+  phoneBadgeLive: {
+    backgroundColor: "#1E9E5A",
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  phoneBadgeLiveText: {
+    fontSize: 8.5,
+    fontWeight: "900",
+    color: "#FFFFFF",
+  },
+  phoneBannerCard: {
+    backgroundColor: "#26231B",
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1.5,
+    borderColor: "#FFC20E",
+  },
+  phoneBannerTagRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  phoneBannerFormatLabel: {
+    fontSize: 9,
+    color: "#B2AB92",
+    fontWeight: "700",
+  },
+  phoneBannerTitle: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#FFC20E",
+    marginBottom: 3,
+  },
+  phoneBannerSub: {
+    fontSize: 11,
+    color: "#F6F1DF",
+    marginBottom: 10,
+    lineHeight: 15,
+  },
+  phoneCtaBtn: {
+    backgroundColor: "#FFC20E",
+    alignSelf: "flex-start",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  phoneCtaBtnText: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: "#26231B",
+  },
+  phoneAssetHint: {
+    fontSize: 9.5,
+    color: "#8FA390",
+    marginTop: 6,
+    fontStyle: "italic",
+  },
+  phoneHomeBar: {
+    width: 60,
+    height: 4,
+    backgroundColor: "rgba(255,255,255,0.3)",
+    borderRadius: 2,
+    alignSelf: "center",
+    marginTop: 10,
+  },
+
+  /* 💻 Desktop Browser Mockup Frame */
+  desktopMockupFrame: {
+    backgroundColor: "#161512",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#3D392B",
+    overflow: "hidden",
+    width: "100%",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+    marginVertical: 4,
+  },
+  browserTopBar: {
+    backgroundColor: "#201E17",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: "#332F23",
+  },
+  browserDotsRow: {
+    flexDirection: "row",
+    gap: 4,
+    alignItems: "center",
+  },
+  browserDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  browserAddressPill: {
+    backgroundColor: "#11100C",
+    borderRadius: 6,
+    paddingVertical: 2,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: "#332F23",
+  },
+  browserAddressText: {
+    fontSize: 9.5,
+    color: "#B2AB92",
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+  },
+  desktopBannerContainer: {
+    backgroundColor: "#26231B",
+    padding: 14,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderLeftWidth: 3,
+    borderLeftColor: "#FFC20E",
+  },
+  desktopBannerContentCol: {
+    flex: 1,
+    marginRight: 10,
+  },
+  desktopBannerTitle: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#FFC20E",
+    marginVertical: 4,
+  },
+  desktopBannerSub: {
+    fontSize: 11,
+    color: "#F6F1DF",
+    marginBottom: 10,
+    lineHeight: 15,
+  },
+  desktopCtaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  desktopCtaBtn: {
+    backgroundColor: "#FFC20E",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  desktopCtaBtnText: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: "#26231B",
+  },
+  desktopHotlineText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  desktopFleetBadgeBox: {
+    backgroundColor: "rgba(255, 194, 14, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 194, 14, 0.3)",
+    borderRadius: 10,
+    padding: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 90,
+  },
+  desktopFleetBadgeTitle: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    color: "#FFC20E",
+    marginTop: 2,
+  },
+  desktopFleetBadgeSub: {
+    fontSize: 8.5,
+    color: "#B2AB92",
+    fontWeight: "700",
+  },
+  desktopAssetHint: {
+    fontSize: 9.5,
+    color: "#8FA390",
+    paddingHorizontal: 14,
+    paddingBottom: 8,
+    fontStyle: "italic",
   },
 });

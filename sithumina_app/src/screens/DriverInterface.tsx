@@ -17,6 +17,7 @@ import {
   updateLorryGpsLocation,
   updateLorryTripStatus,
   updateLorryLiveTripDetails,
+  stopLorryLiveBroadcasting,
   LiveTripDetails,
 } from "../services/database";
 import {
@@ -73,6 +74,9 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({
   const driverRef = useRef(driver);
   driverRef.current = driver;
 
+  const chosenPlate =
+    activeTrip?.plate || (enteredVehiclePlate && enteredVehiclePlate.trim().toUpperCase()) || driver.plate;
+
   // Initial GPS location fetch and reverse geocoding on mount
   useEffect(() => {
     let isMounted = true;
@@ -114,12 +118,27 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({
   const handleLocationUpdate = async (coord: GpsCoordinate) => {
     setCurrentCoords(coord);
     try {
+      const summaryRoute =
+        activeTrip && activeTrip.startLocation && activeTrip.endLocation
+          ? `${activeTrip.startLocation} → ${activeTrip.endLocation}`
+          : driverRef.current.route || "Island-wide Fleet";
+
       await updateLorryGpsLocation(
         driverRef.current.lorryId,
         coord.latitude,
         coord.longitude,
         coord.heading,
-        coord.speed
+        coord.speed,
+        {
+          plate: chosenPlate,
+          driverName: driverRef.current.name,
+          driverPhone: driverRef.current.phone,
+          vehicleType: driverRef.current.vehicleType,
+          status: isLoaded ? "on_trip" : "empty",
+          route: summaryRoute,
+          isLive: true,
+          isOnline: true,
+        }
       );
       setSyncCount((prev) => prev + 1);
       setLastSyncTime(new Date().toLocaleTimeString());
@@ -143,13 +162,15 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({
   const handleConfirmStartLive = async () => {
     setSyncingNow(true);
 
-    const chosenPlate = enteredVehiclePlate.trim().toUpperCase() || driver.plate;
+    const plateVal = enteredVehiclePlate.trim().toUpperCase() || driver.plate;
 
     const tripData: LiveTripDetails = {
       lorryId: driver.lorryId,
       driverId: driver.driverId,
       driverName: driver.name,
-      plate: chosenPlate,
+      driverPhone: driver.phone,
+      vehicleType: driver.vehicleType,
+      plate: plateVal,
       status: isLoaded ? "on_trip" : "empty",
       startLocation: isLoaded ? startLoc.trim() : currentLocName.trim(),
       endLocation: isLoaded ? endLoc.trim() : emptyEndDest.trim(),
@@ -162,6 +183,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({
       hasFreezer: !isLoaded ? hasFreezer : undefined,
       hasHelper: !isLoaded ? hasHelper : undefined,
       isLive: true,
+      isOnline: true,
       lat: currentCoords?.latitude || 6.9271,
       lng: currentCoords?.longitude || 79.8612,
       speedKmH: currentCoords?.speed || 0,
@@ -172,7 +194,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({
     setActiveTrip(tripData);
 
     try {
-      // 1. Update full trip specifications in Firestore
+      // 1. Update full trip specifications in Firestore & API
       await updateLorryLiveTripDetails(tripData);
 
       // 2. Start continuous GPS broadcasting
@@ -198,7 +220,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({
     stopGpsTracking();
     setIsTracking(false);
     try {
-      await updateLorryTripStatus(driver.lorryId, "empty");
+      await stopLorryLiveBroadcasting(driver.lorryId);
     } catch {}
     setActiveTrip(null);
   };
@@ -220,9 +242,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({
   };
 
   // Prepare map vehicle item for the live OpenStreetMap view
-  const chosenPlate =
-    activeTrip?.plate || (enteredVehiclePlate && enteredVehiclePlate.trim().toUpperCase()) || driver.plate;
-
   const mapLorries: MapLorryItem[] = [
     {
       id: driver.lorryId,

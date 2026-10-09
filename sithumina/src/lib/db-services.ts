@@ -69,19 +69,39 @@ export function subscribeLorries(
           const items: Lorry[] = [];
           snapshot.forEach((docSnap) => {
             const data = docSnap.data();
+            const summaryRoute =
+              data.route ||
+              (data.startLocation && data.endLocation
+                ? `${data.startLocation} → ${data.endLocation}`
+                : "Island-wide Fleet");
+
             items.push({
               id: docSnap.id,
               plate: data.plate || "WP LK-0000",
-              route: data.route || "Island-wide",
+              route: summaryRoute,
               driverName: data.driverName || "Driver",
-              driverId: data.driverId,
+              driverPhone: data.driverPhone || data.phone || "",
+              driverId: data.driverId || "",
               vehicleType: data.vehicleType || "Lorry",
               lat: Number.isFinite(Number(data.lat)) ? Number(data.lat) : 6.9271,
               lng: Number.isFinite(Number(data.lng)) ? Number(data.lng) : 79.8612,
-              heading: data.heading ?? 0,
-              speedKmH: data.speedKmH ?? 0,
+              heading: Number(data.heading) || 0,
+              speedKmH: Number(data.speedKmH) || 0,
               status: (data.status as LorryStatus) || "empty",
               lastUpdated: data.lastUpdated || "Just now",
+              updatedAt: data.updatedAt || Date.now(),
+              isOnline: data.isOnline ?? data.isLive ?? true,
+              isLive: data.isLive ?? true,
+              startLocation: data.startLocation || "",
+              endLocation: data.endLocation || "",
+              travelRoute: data.travelRoute || "",
+              emptyTime: data.emptyTime || "",
+              returnRoute: data.returnRoute || "",
+              finalDestination: data.finalDestination || "",
+              availableSpace: data.availableSpace || "",
+              availableCapacityKg: data.availableCapacityKg || "",
+              hasFreezer: !!data.hasFreezer,
+              hasHelper: !!data.hasHelper,
             });
           });
           callback(items);

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -380,11 +380,7 @@ export const SriLankaMapViewer: React.FC<SriLankaMapViewerProps> = ({
       });
     }
 
-    lorriesData.forEach(function(l) {
-      if (!l.lat || !l.lng) return;
-      var isSelected = (l.plate === selectedPlate);
-      var icon = createLorryIcon(l, isSelected);
-      
+    function buildPopupHtml(l) {
       var tripDetailsHtml = '';
       if (l.status === 'On trip') {
         tripDetailsHtml = '<div class="pop-section">' +
@@ -409,30 +405,68 @@ export const SriLankaMapViewer: React.FC<SriLankaMapViewerProps> = ({
         '</div>';
       }
 
-      var popupContent = '<div class="pop-container">' +
+      return '<div class="pop-container">' +
         '<div class="pop-header">' +
           '<div class="pop-plate-title">' + l.plate + '</div>' +
           '<span class="pop-status ' + (l.status === 'On trip' ? 'pop-status-ontrip' : 'pop-status-empty') + '">' + (l.status === 'On trip' ? 'Loaded' : 'Empty') + '</span>' +
         '</div>' +
         '<div class="pop-driver-row"><b>' + (l.driverName || 'Driver') + '</b>' + (l.driverPhone ? ' · ' + l.driverPhone : '') + '</div>' +
         tripDetailsHtml +
+        (l.speedKmH && l.speedKmH > 0 ? '<div style="font-size:10px;color:#2FE084;font-weight:700;margin-top:4px;">● Moving at ' + l.speedKmH + ' km/h</div>' : '') +
       '</div>';
+    }
 
-      var marker = L.marker([l.lat, l.lng], { icon: icon }).addTo(map);
-      marker.bindPopup(popupContent);
-      
-      marker.on('click', function() {
-        notifySelect(l.plate);
+    function renderLorries(data, sel) {
+      if (!Array.isArray(data)) return;
+      var activePlates = {};
+
+      data.forEach(function(l) {
+        if (!l.lat || !l.lng) return;
+        activePlates[l.plate] = true;
+        var isSelected = (l.plate === sel);
+        var icon = createLorryIcon(l, isSelected);
+        var popupContent = buildPopupHtml(l);
+
+        if (markers[l.plate]) {
+          markers[l.plate].setLatLng([l.lat, l.lng]);
+          markers[l.plate].setIcon(icon);
+          markers[l.plate].setPopupContent(popupContent);
+        } else {
+          var marker = L.marker([l.lat, l.lng], { icon: icon }).addTo(map);
+          marker.bindPopup(popupContent);
+          marker.on('click', function() {
+            notifySelect(l.plate);
+          });
+          markers[l.plate] = marker;
+        }
       });
 
-      markers[l.plate] = marker;
+      Object.keys(markers).forEach(function(p) {
+        if (!activePlates[p]) {
+          map.removeLayer(markers[p]);
+          delete markers[p];
+        }
+      });
+
+      if (sel && markers[sel] && !${isMiniMap}) {
+        markers[sel].openPopup();
+      }
+    }
+
+    window.updateLorries = function(data, sel) {
+      renderLorries(data, sel);
+    };
+
+    window.addEventListener('message', function(ev) {
+      try {
+        var d = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data;
+        if (d && d.type === 'UPDATE_LORRIES') {
+          renderLorries(d.lorries, d.selectedPlate);
+        }
+      } catch(e) {}
     });
 
-    if (selectedPlate && markers[selectedPlate] && !${isMiniMap}) {
-      var target = markers[selectedPlate].getLatLng();
-      map.setView(target, 9);
-      markers[selectedPlate].openPopup();
-    }
+    renderLorries(lorriesData, selectedPlate);
   </script>
 </body>
 </html>`;
@@ -451,8 +485,34 @@ export const SriLankaMapViewer: React.FC<SriLankaMapViewerProps> = ({
     }
   };
 
-  const mapHtml = useMemo(() => generateMapHtml(false), [filteredLorries, selectedPlate, isMiniMap]);
-  const fullScreenHtml = useMemo(() => generateMapHtml(true), [filteredLorries, selectedPlate]);
+  const webViewRef = useRef<any>(null);
+  const iframeRef = useRef<any>(null);
+  const fullScreenWebViewRef = useRef<any>(null);
+  const fullScreenIframeRef = useRef<any>(null);
+
+  // Smooth real-time update injection without reloading Leaflet WebView
+  useEffect(() => {
+    const payload = JSON.stringify(filteredLorries);
+    const sel = JSON.stringify(selectedPlate || "");
+    const script = `if (window.updateLorries) { window.updateLorries(${payload}, ${sel}); } true;`;
+
+    if (Platform.OS === "web") {
+      iframeRef.current?.contentWindow?.postMessage(
+        { type: "UPDATE_LORRIES", lorries: filteredLorries, selectedPlate: selectedPlate || "" },
+        "*"
+      );
+      fullScreenIframeRef.current?.contentWindow?.postMessage(
+        { type: "UPDATE_LORRIES", lorries: filteredLorries, selectedPlate: selectedPlate || "" },
+        "*"
+      );
+    } else {
+      webViewRef.current?.injectJavaScript(script);
+      fullScreenWebViewRef.current?.injectJavaScript(script);
+    }
+  }, [filteredLorries, selectedPlate]);
+
+  const mapHtml = useMemo(() => generateMapHtml(false), [isMiniMap]);
+  const fullScreenHtml = useMemo(() => generateMapHtml(true), []);
 
   return (
     <>
@@ -460,6 +520,7 @@ export const SriLankaMapViewer: React.FC<SriLankaMapViewerProps> = ({
         {Platform.OS === "web" ? (
           /* @ts-ignore */
           <iframe
+            ref={iframeRef}
             srcDoc={mapHtml}
             style={{
               width: "100%",
@@ -470,12 +531,20 @@ export const SriLankaMapViewer: React.FC<SriLankaMapViewerProps> = ({
           />
         ) : (
           <WebView
+            ref={webViewRef}
             originWhitelist={["*"]}
             source={{ html: mapHtml }}
             onMessage={handleMessage}
             javaScriptEnabled={true}
             domStorageEnabled={true}
             startInLoadingState={true}
+            onLoadEnd={() => {
+              const payload = JSON.stringify(filteredLorries);
+              const sel = JSON.stringify(selectedPlate || "");
+              webViewRef.current?.injectJavaScript(
+                `if (window.updateLorries) { window.updateLorries(${payload}, ${sel}); } true;`
+              );
+            }}
             renderLoading={() => (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="small" color="#FFC20E" />
@@ -523,16 +592,25 @@ export const SriLankaMapViewer: React.FC<SriLankaMapViewerProps> = ({
             {Platform.OS === "web" ? (
               /* @ts-ignore */
               <iframe
+                ref={fullScreenIframeRef}
                 srcDoc={fullScreenHtml}
                 style={{ width: "100%", height: "100%", border: "none" }}
               />
             ) : (
               <WebView
+                ref={fullScreenWebViewRef}
                 originWhitelist={["*"]}
                 source={{ html: fullScreenHtml }}
                 onMessage={handleMessage}
                 javaScriptEnabled={true}
                 domStorageEnabled={true}
+                onLoadEnd={() => {
+                  const payload = JSON.stringify(filteredLorries);
+                  const sel = JSON.stringify(selectedPlate || "");
+                  fullScreenWebViewRef.current?.injectJavaScript(
+                    `if (window.updateLorries) { window.updateLorries(${payload}, ${sel}); } true;`
+                  );
+                }}
                 style={styles.webView}
               />
             )}
