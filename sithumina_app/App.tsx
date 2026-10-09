@@ -4,7 +4,6 @@ import { StyleSheet } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import { SplashScreen } from "./src/components/SplashScreen";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { AdminDashboard } from "./src/screens/AdminDashboard";
 import { DriverInterface } from "./src/screens/DriverInterface";
@@ -12,7 +11,7 @@ import { DriverRecord } from "./src/services/database";
 
 const SESSION_STORAGE_KEY = "sithumina_driver_app_session";
 
-type AppScreen = "splash" | "login" | "admin" | "driver";
+type AppScreen = "login" | "admin" | "driver";
 
 interface AppSession {
   role: "admin" | "driver";
@@ -20,7 +19,7 @@ interface AppSession {
 }
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState<AppScreen>("splash");
+  const [currentScreen, setCurrentScreen] = useState<AppScreen>("login");
   const [session, setSession] = useState<AppSession | null>(null);
 
   // Restore saved session if available
@@ -31,6 +30,7 @@ export default function App() {
         if (saved) {
           const parsed = JSON.parse(saved) as AppSession;
           setSession(parsed);
+          setCurrentScreen(parsed.role === "admin" ? "admin" : "driver");
         }
       } catch (e) {
         console.warn("Could not restore session:", e);
@@ -38,14 +38,6 @@ export default function App() {
     };
     restoreSession();
   }, []);
-
-  const handleSplashFinish = () => {
-    if (session) {
-      setCurrentScreen(session.role === "admin" ? "admin" : "driver");
-    } else {
-      setCurrentScreen("login");
-    }
-  };
 
   const handleLoginSuccess = async (newSession: AppSession) => {
     setSession(newSession);
@@ -72,10 +64,6 @@ export default function App() {
       <SafeAreaView style={styles.container}>
         <StatusBar style="dark" />
 
-        {currentScreen === "splash" && (
-          <SplashScreen onFinish={handleSplashFinish} />
-        )}
-
         {currentScreen === "login" && (
           <LoginScreen onLoginSuccess={handleLoginSuccess} />
         )}
@@ -95,6 +83,6 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F4F2EA",
+    backgroundColor: "#FDB813",
   },
 });

@@ -24,6 +24,11 @@
     "findEmpty": "Find empty lorry",
     "bookVehicle": "Book individual vehicle"
   },
+  "stats": {
+    "districtsLabel": "Districts covered",
+    "tripsLabel": "Trips completed",
+    "ratingLabel": "Customer rating"
+  },
   "map": {
     "liveCount": "Live · 24 lorries on the road",
     "mobileLive": "24 live",

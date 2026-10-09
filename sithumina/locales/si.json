@@ -24,6 +24,11 @@
     "findEmpty": "හිස් ලොරි සොයන්න",
     "bookVehicle": "තනි වාහන වෙන්කිරීම"
   },
+  "stats": {
+    "districtsLabel": "දිස්ත්‍රික්ක ආවරණය",
+    "tripsLabel": "සම්පූර්ණ කළ ගමන්",
+    "ratingLabel": "පාරිභෝගික ඇගයීම"
+  },
   "map": {
     "liveCount": "සජීවී · ලොරි 24ක් ධාවනයේ",
     "mobileLive": "24 සජීවී",

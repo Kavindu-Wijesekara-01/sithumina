@@ -157,6 +157,85 @@ export async function registerNewDriver(
 }
 
 /**
+ * Register a Rider with a custom/specified Rider ID (Admin action)
+ * Automatically syncs with local storage and Firestore so the rider can log in immediately.
+ */
+export async function registerCustomRider(input: {
+  driverId: string;
+  name: string;
+  phone: string;
+  nic?: string;
+}): Promise<DriverRecord> {
+  const cleanId = input.driverId.trim().toUpperCase();
+  const cleanPlate = `WP-${cleanId.replace(/[^A-Z0-9]/g, "")}`;
+  const lorryId = `lorry-${cleanId.toLowerCase().replace(/[^a-z0-9]/g, "")}`;
+
+  const driverData: DriverRecord = {
+    driverId: cleanId,
+    name: input.name.trim(),
+    phone: input.phone.trim(),
+    plate: cleanPlate,
+    vehicleType: "Lorry Fleet",
+    route: "Island-wide Fleet",
+    lorryId,
+    active: true,
+    createdAt: Date.now(),
+  };
+
+  // 1. Immediately cache locally on device (0ms latency, login works immediately)
+  await saveCachedDriver(driverData);
+
+  // 2. Also sync to central API and Firestore with timeout
+  apiFetch("/api/drivers", {
+    method: "POST",
+    body: JSON.stringify({
+      ...driverData,
+      driverId: cleanId,
+    }),
+  }).catch(() => {});
+
+  (async () => {
+    try {
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout")), 1800)
+      );
+      const firestoreDriverPromise = setDoc(
+        doc(db, "drivers", cleanId),
+        driverData,
+        { merge: true }
+      );
+      const firestoreLorryPromise = setDoc(
+        doc(db, "lorries", lorryId),
+        {
+          id: lorryId,
+          plate: cleanPlate,
+          route: driverData.route,
+          driverName: driverData.name,
+          driverId: cleanId,
+          vehicleType: driverData.vehicleType,
+          lat: 6.9271,
+          lng: 79.8612,
+          heading: 0,
+          speedKmH: 0,
+          status: "empty",
+          lastUpdated: "Just registered",
+          updatedAt: Date.now(),
+        },
+        { merge: true }
+      );
+      await Promise.race([
+        Promise.all([firestoreDriverPromise, firestoreLorryPromise]),
+        timeoutPromise,
+      ]);
+    } catch {
+      // Ignored
+    }
+  })();
+
+  return driverData;
+}
+
+/**
  * Verify driver login with their generated Driver ID or plate
  * Guaranteed fast response with zero hanging/buffering.
  */
@@ -177,6 +256,29 @@ export async function verifyDriverLogin(
 
   if (localMatch) {
     return localMatch;
+  }
+
+  // 1b. Built-in prototype riders fallback (Only ID 1001 / R-1001)
+  const DEMO_RIDERS: Record<string, { name: string; phone: string; plate: string }> = {
+    "R-1001": { name: "Nuwan Perera", phone: "077 234 5678", plate: "WP LB-4521" },
+    "1001": { name: "Nuwan Perera", phone: "077 234 5678", plate: "WP LB-4521" },
+  };
+
+  if (DEMO_RIDERS[cleanId]) {
+    const d = DEMO_RIDERS[cleanId];
+    const demoRec: DriverRecord = {
+      driverId: cleanId,
+      name: d.name,
+      phone: d.phone,
+      plate: d.plate,
+      vehicleType: "Lorry Fleet",
+      route: "Island-wide Fleet",
+      lorryId: `lorry-${cleanId.toLowerCase().replace(/[^a-z0-9]/g, "")}`,
+      active: true,
+      createdAt: Date.now(),
+    };
+    await saveCachedDriver(demoRec);
+    return demoRec;
   }
 
   // 2. Query central Web Backend API (/api/drivers/[id]) with timeout
@@ -314,6 +416,71 @@ export async function updateLorryTripStatus(
   } catch {}
 }
 
+export interface LiveTripDetails {
+  lorryId: string;
+  driverId: string;
+  driverName: string;
+  plate: string;
+  status: "empty" | "on_trip";
+  startLocation: string;
+  endLocation: string;
+  travelRoute?: string;
+  // If loaded
+  emptyTime?: string;
+  returnRoute?: string;
+  finalDestination?: string;
+  // If empty
+  availableSpace?: string;
+  availableCapacityKg?: string;
+  hasFreezer?: boolean;
+  hasHelper?: boolean;
+  // GPS
+  lat?: number;
+  lng?: number;
+  speedKmH?: number;
+  heading?: number;
+  isLive: boolean;
+  updatedAt: number;
+}
+
+/**
+ * Broadcast full Live Trip and Lorry availability specifications
+ * Updates both the central server and Firestore real-time map.
+ */
+export async function updateLorryLiveTripDetails(
+  trip: LiveTripDetails
+): Promise<void> {
+  const summaryRoute =
+    trip.startLocation && trip.endLocation
+      ? `${trip.startLocation} → ${trip.endLocation}`
+      : trip.travelRoute || "Island-wide Fleet";
+
+  // 1. Sync to central API
+  apiFetch(`/api/lorries/${encodeURIComponent(trip.lorryId)}/trip`, {
+    method: "POST",
+    body: JSON.stringify({ ...trip, route: summaryRoute }),
+  }).catch(() => {});
+
+  // 2. Sync to Firestore with timeout protection
+  try {
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Timeout")), 1800)
+    );
+    const firestorePromise = setDoc(
+      doc(db, "lorries", trip.lorryId),
+      {
+        ...trip,
+        route: summaryRoute,
+        status: trip.status,
+        lastUpdated: "Live tracking active",
+        updatedAt: Date.now(),
+      },
+      { merge: true }
+    );
+    await Promise.race([firestorePromise, timeoutPromise]);
+  } catch {}
+}
+
 /* ============================================================
  * ENTERPRISE ADMIN METHODS (Fleet, Bookings, Customers, etc.)
  * ============================================================ */
@@ -323,6 +490,7 @@ export interface LorryRecord {
   plate: string;
   route: string;
   driverName: string;
+  driverPhone?: string;
   driverId: string;
   vehicleType: string;
   lat: number;
@@ -332,6 +500,16 @@ export interface LorryRecord {
   status: "empty" | "on_trip";
   lastUpdated: string;
   updatedAt: number;
+  startLocation?: string;
+  endLocation?: string;
+  travelRoute?: string;
+  emptyTime?: string;
+  returnRoute?: string;
+  finalDestination?: string;
+  availableSpace?: string;
+  availableCapacityKg?: string;
+  hasFreezer?: boolean;
+  hasHelper?: boolean;
 }
 
 export interface CustomerRecord {
@@ -430,6 +608,7 @@ export function subscribeAdminLorries(
               plate: data.plate || "WP LK-0000",
               route: data.route || "Island-wide",
               driverName: data.driverName || "Driver",
+              driverPhone: data.driverPhone || data.phone || "",
               driverId: data.driverId || "",
               vehicleType: data.vehicleType || "Lorry",
               lat: Number.isFinite(Number(data.lat)) ? Number(data.lat) : 6.9271,
@@ -439,6 +618,16 @@ export function subscribeAdminLorries(
               status: (data.status as "empty" | "on_trip") || "empty",
               lastUpdated: data.lastUpdated || "Just now",
               updatedAt: data.updatedAt || Date.now(),
+              startLocation: data.startLocation || "",
+              endLocation: data.endLocation || "",
+              travelRoute: data.travelRoute || "",
+              emptyTime: data.emptyTime || "",
+              returnRoute: data.returnRoute || "",
+              finalDestination: data.finalDestination || "",
+              availableSpace: data.availableSpace || "",
+              availableCapacityKg: data.availableCapacityKg || "",
+              hasFreezer: !!data.hasFreezer,
+              hasHelper: !!data.hasHelper,
             });
           });
           callback(list);

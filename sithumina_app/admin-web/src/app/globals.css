@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --y: #FFC20E;
+  --y2: #FFE08A;
+  --y3: #FFF6D6;
+  --ink: #26231B;
+  --mut: #6F6A5A;
+  --bg: #F4F2EA;
+  --card: #FFFFFF;
+  --line: #E7E2D0;
+  --ok: #1E9E5A;
+  --red: #B3121F;
+  --okb: #DDF3E7;
+  --rb: #FBE0E0;
+  --input-bg: #FED857;
+  --input-border: #E5AA0E;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17150F;
+    --card: #241F16;
+    --ink: #F6F1DF;
+    --mut: #B2AB92;
+    --line: #3B3727;
+    --y3: #352E12;
+    --okb: #173B28;
+    --rb: #4A1D1D;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #17150F;
+  --card: #241F16;
+  --ink: #F6F1DF;
+  --mut: #B2AB92;
+  --line: #3B3727;
+  --y3: #352E12;
+  --okb: #173B28;
+  --rb: #4A1D1D;
+}
+
+:root[data-theme="light"] {
+  --bg: #F4F2EA;
+  --card: #FFFFFF;
+  --ink: #26231B;
+  --mut: #6F6A5A;
+  --line: #E7E2D0;
+  --y3: #FFF6D6;
+  --okb: #DDF3E7;
+  --rb: #FBE0E0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-padding-top: env(safe-area-inset-top, 0px);
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--ink);
+  font-size: 14px;
+}
+
+/* Accessible focus ring */
+:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* Map Pulse Animation per prototype */
+@keyframes pu {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+.pulse-anim {
+  animation: pu 2s infinite;
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-anim {
+    animation: none;
+  }
+}
+
+/* Custom Leaflet divIcons */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  border-radius: 14px;
+  background-color: var(--y3) !important;
+}
+
+.custom-lorry-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.custom-lorry-pin.empty .pin-core {
+  background-color: var(--ok);
+  border: 2px solid #FFFFFF;
+}
+
+.custom-lorry-pin.ontrip .pin-core {
+  background-color: var(--ink);
+  border: 2.5px solid var(--y);
+}

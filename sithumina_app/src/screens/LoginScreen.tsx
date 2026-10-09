@@ -7,13 +7,11 @@ import {
   StyleSheet,
   Image,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
 } from "react-native";
 import {
-  ADMIN_SECRET_ID,
   isAdminId,
   verifyDriverLogin,
   DriverRecord,
@@ -34,7 +32,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const handleLogin = async () => {
     const trimmed = loginId.trim();
     if (!trimmed) {
-      setErrorMessage("Please enter your Login ID.");
+      setErrorMessage("Please enter your ID");
       return;
     }
 
@@ -42,14 +40,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     setErrorMessage(null);
 
     try {
-      // 1. Check Admin Login format: sithuminaadmin$
+      // 1. Admin login verification
       if (isAdminId(trimmed)) {
         setLoading(false);
         onLoginSuccess({ role: "admin" });
         return;
       }
 
-      // 2. Check Driver Login via Firestore Database
+      // 2. Driver login verification
       const driver = await verifyDriverLogin(trimmed);
       if (driver) {
         setLoading(false);
@@ -57,15 +55,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         return;
       }
 
-      // If neither matches
+      // Neither matched
       setLoading(false);
-      setErrorMessage(
-        "Invalid ID. Please enter the Admin ID or your registered Driver ID (e.g. ST-DRV-XXXX)."
-      );
+      setErrorMessage("Invalid ID. Please check and try again.");
     } catch (err: any) {
       setLoading(false);
       setErrorMessage(
-        err?.message || "Failed to connect to database. Please check connection."
+        err?.message || "Connection failed. Please check internet."
       );
     }
   };
@@ -73,80 +69,76 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.container}
+      style={styles.screen}
     >
+      {/* Background Decorative Organic Shapes */}
+      <View style={styles.bgBlobTopRight} pointerEvents="none" />
+      <View style={styles.bgBlobMidRight} pointerEvents="none" />
+      <View style={styles.bgRoadCurve} pointerEvents="none" />
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        {/* Header Branding */}
-        <View style={styles.header}>
-          <View style={styles.logoCircle}>
+        <View style={styles.centerContainer}>
+          {/* Logo */}
+          <View style={styles.logoContainer}>
             <Image
-              source={require("../../assets/logo.png")}
+              source={require("../../assets/icon.png")}
               style={styles.logo}
               resizeMode="contain"
             />
           </View>
-          <Text style={styles.brandTitle}>සිතුමිණ ට්‍රාන්ස්පෝට්</Text>
-          <Text style={styles.brandSubtitle}>Sithumina Driver App</Text>
-          <Text style={styles.badgeText}>Admins & Drivers Portal</Text>
-        </View>
 
-        {/* Login Card */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Sign In to App</Text>
-          <Text style={styles.cardDesc}>
-            Enter your assigned Driver ID or Admin access key to continue.
-          </Text>
+          {/* App Title */}
+          <Text style={styles.title}>Sithumina Transport</Text>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Login ID</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. ST-DRV-1234 or Admin Key"
-              placeholderTextColor="#8C877A"
-              value={loginId}
-              onChangeText={(text) => {
-                setLoginId(text);
-                if (errorMessage) setErrorMessage(null);
-              }}
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!loading}
-            />
+          {/* Riders & Admin Pill Badge */}
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>Riders & Admin</Text>
           </View>
 
-          {errorMessage ? (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>⚠️ {errorMessage}</Text>
+          {/* Form Area */}
+          <View style={styles.formContainer}>
+            {/* Input Field */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputIcon}>🪪</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Enter your ID"
+                placeholderTextColor="#7D5E06"
+                value={loginId}
+                onChangeText={(text) => {
+                  setLoginId(text);
+                  if (errorMessage) setErrorMessage(null);
+                }}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!loading}
+              />
             </View>
-          ) : null}
 
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleLogin}
-            disabled={loading}
-            activeOpacity={0.85}
-          >
-            {loading ? (
-              <ActivityIndicator color="#26231B" />
-            ) : (
-              <Text style={styles.buttonText}>Log In to System ➔</Text>
+            {/* Error Message */}
+            {errorMessage && (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>⚠️ {errorMessage}</Text>
+              </View>
             )}
-          </TouchableOpacity>
 
-          {/* Helper Tips */}
-          <View style={styles.helpBox}>
-            <Text style={styles.helpTitle}>💡 Access Guidelines:</Text>
-            <Text style={styles.helpItem}>
-              • <Text style={styles.bold}>Admin Access:</Text> Use the master admin key{" "}
-              <Text style={styles.codeText}>sithuminaadmin$</Text>
-            </Text>
-            <Text style={styles.helpItem}>
-              • <Text style={styles.bold}>Driver Access:</Text> Use the unique ID generated by your dispatch manager (e.g.{" "}
-              <Text style={styles.codeText}>ST-DRV-XXXX</Text>).
-            </Text>
+            {/* Login Button */}
+            <TouchableOpacity
+              style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+              onPress={handleLogin}
+              disabled={loading}
+              activeOpacity={0.88}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FDB813" size="small" />
+              ) : (
+                <Text style={styles.loginButtonText}>Login ➔</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
@@ -155,165 +147,156 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
-    backgroundColor: "#F4F2EA",
+    backgroundColor: "#FDB813", // Sithumina brand golden yellow
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
-    padding: 20,
-    paddingTop: 50,
-    paddingBottom: 40,
+    paddingHorizontal: 28,
+    paddingVertical: 40,
   },
-  header: {
+  centerContainer: {
     alignItems: "center",
-    marginBottom: 28,
+    width: "100%",
   },
-  logoCircle: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: "#FFC20E",
+
+  /* Background Organic Shapes */
+  bgBlobTopRight: {
+    position: "absolute",
+    top: -50,
+    right: -80,
+    width: 320,
+    height: 320,
+    borderRadius: 160,
+    backgroundColor: "rgba(235, 160, 0, 0.35)",
+  },
+  bgBlobMidRight: {
+    position: "absolute",
+    top: 190,
+    right: -100,
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: "rgba(235, 160, 0, 0.22)",
+  },
+  bgRoadCurve: {
+    position: "absolute",
+    bottom: -60,
+    left: -40,
+    right: -40,
+    height: 200,
+    borderTopWidth: 3,
+    borderStyle: "dashed",
+    borderColor: "rgba(185, 125, 0, 0.55)",
+    borderRadius: 220,
+    backgroundColor: "rgba(240, 165, 0, 0.22)",
+  },
+
+  /* Logo */
+  logoContainer: {
+    width: 175,
+    height: 135,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 14,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  logo: {
-    width: 65,
-    height: 65,
-  },
-  brandTitle: {
-    fontSize: 22,
-    fontWeight: "900",
-    color: "#26231B",
-    marginBottom: 2,
-  },
-  brandSubtitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#26231B",
-    marginBottom: 8,
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#26231B",
-    backgroundColor: "#FFE08A",
-    paddingVertical: 4,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    padding: 22,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: "#E7E2D0",
-  },
-  cardTitle: {
-    fontSize: 19,
-    fontWeight: "800",
-    color: "#26231B",
-    marginBottom: 6,
-  },
-  cardDesc: {
-    fontSize: 13,
-    color: "#6F6A5A",
-    lineHeight: 18,
-    marginBottom: 20,
-  },
-  inputGroup: {
     marginBottom: 16,
   },
-  label: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#26231B",
-    marginBottom: 8,
+  logo: {
+    width: "100%",
+    height: "100%",
   },
-  input: {
-    backgroundColor: "#F8F7F2",
-    borderWidth: 1.5,
-    borderColor: "#DCD6C4",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#26231B",
+
+  /* Title & Subtitle */
+  title: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: "#B31317", // Bold crimson red matching the design
+    textAlign: "center",
+    letterSpacing: -0.3,
+    marginBottom: 10,
   },
-  button: {
-    backgroundColor: "#FFC20E",
-    paddingVertical: 15,
-    borderRadius: 12,
+  badge: {
+    backgroundColor: "rgba(230, 155, 0, 0.55)",
+    paddingVertical: 6,
+    paddingHorizontal: 22,
+    borderRadius: 20,
+    marginBottom: 38,
+  },
+  badgeText: {
+    fontSize: 13.5,
+    fontWeight: "800",
+    color: "#1F1E1B",
+  },
+
+  /* Form */
+  formContainer: {
+    width: "100%",
+  },
+  inputContainer: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    marginTop: 6,
-    shadowColor: "#FFC20E",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
+    backgroundColor: "#FED857", // Light creamy yellow container
+    borderWidth: 1.5,
+    borderColor: "#E5AA0E",
+    borderRadius: 24,
+    height: 62,
+    paddingHorizontal: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
     shadowRadius: 6,
     elevation: 2,
   },
-  buttonDisabled: {
-    opacity: 0.6,
+  inputIcon: {
+    fontSize: 20,
+    marginRight: 12,
   },
-  buttonText: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#26231B",
+  textInput: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: "600",
+    color: "#1F1E1B",
+    height: "100%",
   },
-  errorBox: {
-    backgroundColor: "#FEE2E2",
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: "#FCA5A5",
+
+  /* Error */
+  errorContainer: {
+    marginTop: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "rgba(31, 30, 27, 0.85)",
+    borderRadius: 14,
+    alignSelf: "center",
   },
   errorText: {
+    color: "#FED857",
     fontSize: 12.5,
-    color: "#B91C1C",
-    fontWeight: "600",
-  },
-  helpBox: {
-    marginTop: 22,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: "#EFECE3",
-  },
-  helpTitle: {
-    fontSize: 12,
     fontWeight: "700",
-    color: "#524E42",
-    marginBottom: 6,
+    textAlign: "center",
   },
-  helpItem: {
-    fontSize: 11.5,
-    color: "#6F6A5A",
-    lineHeight: 17,
-    marginBottom: 4,
+
+  /* Login Button */
+  loginButton: {
+    backgroundColor: "#1F1E1B", // Dark charcoal black
+    borderRadius: 24,
+    height: 62,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 18,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    elevation: 5,
   },
-  bold: {
-    fontWeight: "700",
-    color: "#26231B",
+  loginButtonDisabled: {
+    opacity: 0.7,
   },
-  codeText: {
-    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
-    backgroundColor: "#FFF6D6",
-    color: "#26231B",
-    fontWeight: "700",
+  loginButtonText: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#FDB813", // Sithumina yellow
+    letterSpacing: 0.3,
   },
 });
