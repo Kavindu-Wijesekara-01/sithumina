@@ -779,3 +779,56 @@ export function subscribeInquiries(
     }
   );
 }
+
+/* ============================================================
+ * BANNERS SERVICE
+ * ============================================================ */
+
+export interface WebBanner {
+  id: string;
+  title?: string;
+  subtitle?: string;
+  desktopImage?: string;
+  mobileImage?: string;
+  viewMode?: "all" | "mobile" | "desktop";
+  ctaText?: string;
+  isActive: boolean;
+  createdAt: number;
+}
+
+const BANNERS_COL = "banners";
+
+export function subscribeBanners(
+  callback: (banners: WebBanner[]) => void
+): () => void {
+  try {
+    const colRef = collection(db, BANNERS_COL);
+    return onSnapshot(
+      query(colRef, orderBy("createdAt", "desc")),
+      (snapshot) => {
+        const items: WebBanner[] = [];
+        snapshot.forEach((d) => {
+          const data = d.data();
+          if (data.isActive !== false) {
+            items.push({
+              id: d.id,
+              title: data.title,
+              subtitle: data.subtitle,
+              desktopImage: data.desktopImage || data.image,
+              mobileImage: data.mobileImage || data.desktopImage || data.image,
+              viewMode: data.viewMode || "all",
+              ctaText: data.ctaText || "Book Now",
+              isActive: true,
+              createdAt: data.createdAt || Date.now(),
+            });
+          }
+        });
+        callback(items);
+      },
+      () => {}
+    );
+  } catch {
+    return () => {};
+  }
+}
+

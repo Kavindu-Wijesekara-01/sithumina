@@ -18,7 +18,16 @@ export function isValidLatLng(coords: unknown): coords is [number, number] {
   if (!coords || !Array.isArray(coords) || coords.length !== 2) return false;
   const lat = Number(coords[0]);
   const lng = Number(coords[1]);
-  return Number.isFinite(lat) && Number.isFinite(lng);
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    !isNaN(lat) &&
+    !isNaN(lng) &&
+    lat >= 4.0 &&
+    lat <= 12.0 &&
+    lng >= 78.0 &&
+    lng <= 84.0
+  );
 }
 
 // Controller component to handle programmatically centering and flying on the map
@@ -43,9 +52,16 @@ function MapController({
     if (!isSame) {
       prevUserLocation.current = userLocation;
       try {
-        map.flyTo(userLocation, 12, { animate: true, duration: 1.5 });
-      } catch (err) {
-        console.warn("Leaflet flyTo user location error:", err);
+        const size = map.getSize();
+        if (size && size.x > 0 && size.y > 0) {
+          map.flyTo(userLocation, 12, { animate: true, duration: 1.5 });
+        } else {
+          map.setView(userLocation, 12);
+        }
+      } catch {
+        try {
+          map.setView(userLocation, 12);
+        } catch {}
       }
     }
   }, [userLocation, map]);
@@ -54,14 +70,21 @@ function MapController({
     if (selectedLorry) {
       const lat = Number(selectedLorry.lat);
       const lng = Number(selectedLorry.lng);
-      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      if (isValidLatLng([lat, lng])) {
         try {
-          map.flyTo([lat, lng], 11, {
-            animate: true,
-            duration: 1.2,
-          });
-        } catch (err) {
-          console.warn("Leaflet flyTo selected lorry error:", err);
+          const size = map.getSize();
+          if (size && size.x > 0 && size.y > 0) {
+            map.flyTo([lat, lng], 11, {
+              animate: true,
+              duration: 1.2,
+            });
+          } else {
+            map.setView([lat, lng], 11);
+          }
+        } catch {
+          try {
+            map.setView([lat, lng], 11);
+          } catch {}
         }
       }
     }
@@ -77,7 +100,7 @@ export const LeafletMapInner: React.FC<LeafletMapInnerProps> = ({
   userLocation,
 }) => {
   const defaultCenter: [number, number] = [7.8731, 80.7718]; // Sri Lanka geographic center
-  const defaultZoom = 7.4;
+  const defaultZoom = 7.5;
 
   const selectedLorry = useMemo(() => {
     return lorries.find((l) => l.id === selectedLorryId) || null;
@@ -157,9 +180,10 @@ export const LeafletMapInner: React.FC<LeafletMapInnerProps> = ({
 
       {/* Live Lorry Markers */}
       {lorries.map((lorry) => {
+        if (!lorry) return null;
         const lat = Number(lorry.lat);
         const lng = Number(lorry.lng);
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        if (!isValidLatLng([lat, lng])) {
           return null;
         }
 

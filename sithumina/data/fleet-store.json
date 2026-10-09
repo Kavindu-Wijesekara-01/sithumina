@@ -1,6 +1,86 @@
 {
-  "drivers": [],
-  "lorries": [],
+  "drivers": [
+    {
+      "driverId": "R-1001",
+      "name": "Nisal",
+      "phone": "0704692227",
+      "plate": "WP-R1001",
+      "vehicleType": "Lorry Fleet",
+      "route": "Island-wide Fleet",
+      "lorryId": "lorry-wpr1001",
+      "active": true,
+      "createdAt": 1791564941100
+    },
+    {
+      "driverId": "R-1003",
+      "name": "Lakaya",
+      "phone": "0764011509",
+      "plate": "WP-R1003",
+      "vehicleType": "Lorry Fleet",
+      "route": "Island-wide Fleet",
+      "lorryId": "lorry-wpr1003",
+      "active": true,
+      "createdAt": 1791564908468
+    },
+    {
+      "driverId": "R-1002",
+      "name": "Nisal",
+      "phone": "0704692220",
+      "plate": "WP-R1002",
+      "vehicleType": "Lorry Fleet",
+      "route": "Island-wide Fleet",
+      "lorryId": "lorry-wpr1002",
+      "active": true,
+      "createdAt": 1791552271187
+    }
+  ],
+  "lorries": [
+    {
+      "id": "lorry-wpr1001",
+      "plate": "WP-R1001",
+      "route": "Island-wide Fleet",
+      "driverName": "Nisal",
+      "driverId": "R-1001",
+      "vehicleType": "Lorry Fleet",
+      "lat": 6.9271,
+      "lng": 79.8612,
+      "heading": 0,
+      "speedKmH": 0,
+      "status": "empty",
+      "lastUpdated": "Just registered",
+      "updatedAt": 1791564941100
+    },
+    {
+      "id": "lorry-wpr1003",
+      "plate": "WP-R1003",
+      "route": "Island-wide Fleet",
+      "driverName": "Lakaya",
+      "driverId": "R-1003",
+      "vehicleType": "Lorry Fleet",
+      "lat": 6.9271,
+      "lng": 79.8612,
+      "heading": 0,
+      "speedKmH": 0,
+      "status": "empty",
+      "lastUpdated": "Just registered",
+      "updatedAt": 1791564908468
+    },
+    {
+      "id": "lorry-wpr1002",
+      "plate": "WP-R1002",
+      "route": "Island-wide Fleet",
+      "driverName": "Nisal",
+      "driverId": "R-1002",
+      "vehicleType": "Lorry Fleet",
+      "lat": 6.9271,
+      "lng": 79.8612,
+      "heading": 0,
+      "speedKmH": 0,
+      "status": "empty",
+      "lastUpdated": "Just registered",
+      "updatedAt": 1791552271187
+    }
+  ],
   "customers": [
     {
       "id": "CUST-0779998877",

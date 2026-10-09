@@ -10,6 +10,8 @@ import {
   query,
   where,
   onSnapshot,
+  deleteDoc,
+  updateDoc,
 } from "firebase/firestore";
 
 export const ADMIN_SECRET_ID = "sithuminaadmin$";
@@ -870,3 +872,343 @@ export async function getAllReviews(): Promise<ReviewRecord[]> {
   } catch {}
   return [];
 }
+
+/* ============================================================
+ * VEHICLES PERSISTENCE & FIRESTORE SYNC
+ * ============================================================ */
+
+export const LOCAL_VEHICLES_KEY = "@sithumina_vehicles_cache";
+
+export interface VehicleItem {
+  plate: string;
+  type: string;
+  capacity: string;
+  rider: string;
+  status: "On trip" | "Empty";
+  createdAt?: number;
+}
+
+export async function getCachedVehicles(): Promise<VehicleItem[]> {
+  try {
+    const raw = await AsyncStorage.getItem(LOCAL_VEHICLES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function subscribeAdminVehicles(
+  callback: (vehicles: VehicleItem[]) => void
+): () => void {
+  let isMounted = true;
+
+  // 1. Immediately provide locally cached vehicles
+  getCachedVehicles().then((cached) => {
+    if (isMounted && cached.length > 0) {
+      callback(cached);
+    }
+  });
+
+  // 2. Real-time Firestore sync
+  let unsubscribeFs = () => {};
+  try {
+    const colRef = collection(db, "lorries");
+    unsubscribeFs = onSnapshot(
+      colRef,
+      (snapshot) => {
+        if (!isMounted) return;
+        if (!snapshot.empty) {
+          const list: VehicleItem[] = [];
+          snapshot.forEach((d) => {
+            const data = d.data();
+            list.push({
+              plate: data.plate || d.id,
+              type: data.vehicleType || "Lorry 10ft",
+              capacity: data.capacity || data.availableCapacityKg ? `${data.capacity || data.availableCapacityKg}` : "3 t",
+              rider: data.driverName || data.driverId || "Unassigned",
+              status: data.status === "on_trip" ? "On trip" : "Empty",
+              createdAt: data.createdAt || data.updatedAt || Date.now(),
+            });
+          });
+          // Cache locally
+          AsyncStorage.setItem(LOCAL_VEHICLES_KEY, JSON.stringify(list)).catch(() => {});
+          callback(list);
+        }
+      },
+      (err) => {
+        console.warn("Vehicles Firestore subscription notice:", err);
+      }
+    );
+  } catch {}
+
+  return () => {
+    isMounted = false;
+    unsubscribeFs();
+  };
+}
+
+export async function saveAdminVehicle(veh: VehicleItem): Promise<void> {
+  const cleanPlate = veh.plate.trim().toUpperCase();
+  const lorryId = `lorry-${cleanPlate.replace(/[^A-Z0-9]/gi, "").toLowerCase()}`;
+
+  // 1. Save to local cache immediately (works offline, zero latency)
+  try {
+    const current = await getCachedVehicles();
+    const filtered = current.filter((v) => v.plate.toUpperCase() !== cleanPlate);
+    const updated = [veh, ...filtered];
+    await AsyncStorage.setItem(LOCAL_VEHICLES_KEY, JSON.stringify(updated));
+  } catch (err) {
+    console.warn("Vehicle local cache error:", err);
+  }
+
+  // 2. Save to Firestore
+  try {
+    const lorryDoc = doc(db, "lorries", lorryId);
+    await setDoc(
+      lorryDoc,
+      {
+        id: lorryId,
+        plate: cleanPlate,
+        vehicleType: veh.type,
+        capacity: veh.capacity,
+        driverName: veh.rider,
+        route: "Island-wide Fleet",
+        status: veh.status === "On trip" ? "on_trip" : "empty",
+        lat: 6.9271,
+        lng: 79.8612,
+        heading: 0,
+        speedKmH: 0,
+        isLive: false,
+        isOnline: true,
+        lastUpdated: "Registered",
+        updatedAt: Date.now(),
+        createdAt: Date.now(),
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn("Firestore save vehicle notice:", err);
+  }
+
+  // 3. Sync to API if available
+  apiFetch("/api/lorries", {
+    method: "POST",
+    body: JSON.stringify({
+      plate: cleanPlate,
+      route: "Island-wide Fleet",
+      driverName: veh.rider,
+      vehicleType: veh.type,
+      capacity: veh.capacity,
+    }),
+  }).catch(() => {});
+}
+
+export async function deleteAdminVehicle(plate: string): Promise<void> {
+  const cleanPlate = plate.trim().toUpperCase();
+  const lorryId = `lorry-${cleanPlate.replace(/[^A-Z0-9]/gi, "").toLowerCase()}`;
+
+  try {
+    const current = await getCachedVehicles();
+    const updated = current.filter((v) => v.plate.toUpperCase() !== cleanPlate);
+    await AsyncStorage.setItem(LOCAL_VEHICLES_KEY, JSON.stringify(updated));
+  } catch {}
+
+  try {
+    await deleteDoc(doc(db, "lorries", lorryId));
+  } catch {}
+}
+
+/* ============================================================
+ * RIDERS / DRIVERS PERSISTENCE & FIRESTORE SYNC
+ * ============================================================ */
+
+export function subscribeAdminDrivers(
+  callback: (drivers: DriverRecord[]) => void
+): () => void {
+  let isMounted = true;
+
+  // 1. Immediately provide locally cached drivers
+  getCachedDrivers().then((cached) => {
+    if (isMounted && cached.length > 0) {
+      callback(cached);
+    }
+  });
+
+  // 2. Real-time Firestore sync
+  let unsubscribeFs = () => {};
+  try {
+    const colRef = collection(db, "drivers");
+    unsubscribeFs = onSnapshot(
+      colRef,
+      (snapshot) => {
+        if (!isMounted) return;
+        if (!snapshot.empty) {
+          const list: DriverRecord[] = [];
+          snapshot.forEach((d) => {
+            const data = d.data();
+            list.push({
+              id: d.id,
+              driverId: data.driverId || d.id,
+              name: data.name || "Driver",
+              phone: data.phone || "",
+              plate: data.plate || "—",
+              vehicleType: data.vehicleType || "Lorry Fleet",
+              route: data.route || "Island-wide",
+              lorryId: data.lorryId || `lorry-${d.id.toLowerCase()}`,
+              active: data.active !== false,
+              createdAt: data.createdAt || Date.now(),
+            });
+          });
+          // Cache locally
+          AsyncStorage.setItem(LOCAL_DRIVERS_KEY, JSON.stringify(list)).catch(() => {});
+          callback(list);
+        }
+      },
+      (err) => {
+        console.warn("Drivers Firestore subscription notice:", err);
+      }
+    );
+  } catch {}
+
+  return () => {
+    isMounted = false;
+    unsubscribeFs();
+  };
+}
+
+/* ============================================================
+ * BANNERS PERSISTENCE & FIRESTORE SYNC
+ * ============================================================ */
+
+export const LOCAL_BANNERS_KEY = "@sithumina_app_banners";
+
+export interface BannerItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  tag: string;
+  target: "all" | "riders" | "customers";
+  viewMode?: "all" | "mobile" | "desktop";
+  desktopImage?: string;
+  mobileImage?: string;
+  ctaText?: string;
+  isActive: boolean;
+  createdAt: number;
+}
+
+export async function getCachedBanners(): Promise<BannerItem[]> {
+  try {
+    const raw = await AsyncStorage.getItem(LOCAL_BANNERS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function subscribeAdminBanners(
+  callback: (banners: BannerItem[]) => void
+): () => void {
+  let isMounted = true;
+
+  // 1. Immediately provide locally cached banners
+  getCachedBanners().then((cached) => {
+    if (isMounted && cached.length > 0) {
+      callback(cached);
+    }
+  });
+
+  // 2. Real-time Firestore sync
+  let unsubscribeFs = () => {};
+  try {
+    const colRef = collection(db, "banners");
+    unsubscribeFs = onSnapshot(
+      colRef,
+      (snapshot) => {
+        if (!isMounted) return;
+        if (!snapshot.empty) {
+          const list: BannerItem[] = [];
+          snapshot.forEach((d) => {
+            const data = d.data();
+            list.push({
+              id: d.id,
+              title: data.title || "",
+              subtitle: data.subtitle || "",
+              tag: data.tag || "PROMO",
+              target: data.target || "all",
+              viewMode: data.viewMode || "all",
+              desktopImage: data.desktopImage,
+              mobileImage: data.mobileImage,
+              ctaText: data.ctaText || "Book Now",
+              isActive: data.isActive !== false,
+              createdAt: data.createdAt || Date.now(),
+            });
+          });
+          list.sort((a, b) => b.createdAt - a.createdAt);
+          AsyncStorage.setItem(LOCAL_BANNERS_KEY, JSON.stringify(list)).catch(() => {});
+          callback(list);
+        }
+      },
+      (err) => {
+        console.warn("Banners Firestore subscription notice:", err);
+      }
+    );
+  } catch {}
+
+  return () => {
+    isMounted = false;
+    unsubscribeFs();
+  };
+}
+
+export async function saveAdminBanner(banner: BannerItem): Promise<void> {
+  // 1. Save to local cache immediately
+  try {
+    const current = await getCachedBanners();
+    const filtered = current.filter((b) => b.id !== banner.id);
+    const updated = [banner, ...filtered];
+    await AsyncStorage.setItem(LOCAL_BANNERS_KEY, JSON.stringify(updated));
+  } catch (err) {
+    console.warn("Banner local cache error:", err);
+  }
+
+  // 2. Save to Firestore
+  try {
+    const docRef = doc(db, "banners", banner.id);
+    await setDoc(docRef, banner, { merge: true });
+  } catch (err) {
+    console.warn("Firestore save banner notice:", err);
+  }
+}
+
+export async function deleteAdminBanner(id: string): Promise<void> {
+  try {
+    const current = await getCachedBanners();
+    const updated = current.filter((b) => b.id !== id);
+    await AsyncStorage.setItem(LOCAL_BANNERS_KEY, JSON.stringify(updated));
+  } catch {}
+
+  try {
+    await deleteDoc(doc(db, "banners", id));
+  } catch {}
+}
+
+export async function toggleAdminBanner(id: string): Promise<void> {
+  try {
+    const current = await getCachedBanners();
+    let nextState = true;
+    const updated = current.map((b) => {
+      if (b.id === id) {
+        nextState = !b.isActive;
+        return { ...b, isActive: nextState };
+      }
+      return b;
+    });
+    await AsyncStorage.setItem(LOCAL_BANNERS_KEY, JSON.stringify(updated));
+
+    await updateDoc(doc(db, "banners", id), {
+      isActive: nextState,
+      updatedAt: Date.now(),
+    });
+  } catch {}
+}
+

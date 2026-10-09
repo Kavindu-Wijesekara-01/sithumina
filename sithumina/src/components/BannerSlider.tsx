@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
+import { subscribeBanners } from "@/lib/db-services";
 
 export interface BannerItem {
   id: string;
@@ -39,11 +40,28 @@ export const BannerSlider: React.FC<BannerSliderProps> = ({
   autoPlayIntervalMs = 5000,
   banners = DEFAULT_BANNERS,
 }) => {
+  const [activeBanners, setActiveBanners] = useState<BannerItem[]>(banners);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const slideCount = banners.length;
+  useEffect(() => {
+    const unsub = subscribeBanners((dbBanners) => {
+      if (dbBanners && dbBanners.length > 0) {
+        const mapped: BannerItem[] = dbBanners.map((b) => ({
+          id: b.id,
+          image: b.desktopImage || "/banner-desktop.jpg",
+          mobileImage: b.mobileImage || b.desktopImage || "/banner-mobile-2.jpg",
+          alt: b.title || "Sithumina Transport Promo",
+          href: "tel:0755984984",
+        }));
+        setActiveBanners(mapped);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const slideCount = activeBanners.length;
 
   const nextSlide = useCallback(() => {
     if (slideCount <= 1) return;
@@ -86,7 +104,7 @@ export const BannerSlider: React.FC<BannerSliderProps> = ({
         onBlur={() => setIsPaused(false)}
         className="group relative w-full aspect-[3200/1312] lg:aspect-[1024/168] rounded-[14px] lg:rounded-[18px] overflow-hidden flex-none select-none shadow-sm border border-[#E7E2D0] bg-[#0c2444] transition-all"
       >
-        {banners.map((banner, index) => {
+        {activeBanners.map((banner, index) => {
           const isActive = index === currentSlide;
           const mobileSrc = banner.mobileImage || banner.image;
 
@@ -196,7 +214,7 @@ export const BannerSlider: React.FC<BannerSliderProps> = ({
           role="tablist"
           aria-label="Slide dots"
         >
-          {banners.map((_, index) => {
+          {activeBanners.map((_, index) => {
             const isActive = index === currentSlide;
             return (
               <button

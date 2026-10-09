@@ -17,6 +17,16 @@ import {
   LorryRecord,
   registerNewDriver,
   registerCustomRider,
+  subscribeAdminDrivers,
+  subscribeAdminVehicles,
+  saveAdminVehicle,
+  deleteAdminVehicle,
+  subscribeAdminBanners,
+  saveAdminBanner,
+  deleteAdminBanner,
+  toggleAdminBanner,
+  subscribeAdminBookings,
+  updateBookingDispatch,
 } from "../services/database";
 import { SriLankaMapViewer } from "../components/SriLankaMapViewer";
 
@@ -223,18 +233,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   const [selectedBannerForInspect, setSelectedBannerForInspect] = useState<AppBanner | null>(null);
   const [inspectPreviewDevice, setInspectPreviewDevice] = useState<"mobile" | "desktop">("mobile");
 
-  // Load saved banners on mount
+  // Real-time synchronization of banners (Firestore + Local storage)
   useEffect(() => {
-    AsyncStorage.getItem("@sithumina_app_banners").then((raw) => {
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            setBanners(parsed);
-          }
-        } catch {}
+    const unsubscribe = subscribeAdminBanners((bannerList) => {
+      if (bannerList) {
+        setBanners(bannerList);
       }
     });
+    return () => unsubscribe();
   }, []);
 
   const handleSaveBanner = async () => {
@@ -255,9 +261,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
       isActive: bannerActive,
       createdAt: Date.now(),
     };
-    const updated = [newBanner, ...banners];
-    setBanners(updated);
-    await AsyncStorage.setItem("@sithumina_app_banners", JSON.stringify(updated));
+    await saveAdminBanner(newBanner);
     setAddBannerModal(false);
     setBannerTitle("");
     setBannerSub("");
@@ -265,22 +269,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     setBannerDesktopImg("");
     setBannerMobileImg("");
     setBannerCtaText("Book Now");
-    showToast("Banner added successfully!");
+    showToast("Banner saved to database!");
   };
 
   const handleDeleteBanner = async (id: string) => {
-    const updated = banners.filter((b) => b.id !== id);
-    setBanners(updated);
-    await AsyncStorage.setItem("@sithumina_app_banners", JSON.stringify(updated));
+    await deleteAdminBanner(id);
     showToast("Banner deleted");
   };
 
   const handleToggleBanner = async (id: string) => {
-    const updated = banners.map((b) =>
-      b.id === id ? { ...b, isActive: !b.isActive } : b
-    );
-    setBanners(updated);
-    await AsyncStorage.setItem("@sithumina_app_banners", JSON.stringify(updated));
+    await toggleAdminBanner(id);
   };
 
   // Form states
@@ -342,13 +340,77 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     return () => unsubscribe();
   }, []);
 
+  // Real-time Drivers / Riders subscription (Firestore + Local storage)
+  useEffect(() => {
+    const unsubscribe = subscribeAdminDrivers((driverList) => {
+      if (driverList && driverList.length > 0) {
+        setRiders(
+          driverList.map((d) => ({
+            name: d.name,
+            id: d.driverId,
+            phone: d.phone,
+            vehicle: d.plate && d.plate !== "—" ? d.plate : "—",
+            status: d.active ? 1 : 0,
+          }))
+        );
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Real-time Vehicles subscription (Firestore + Local storage)
+  useEffect(() => {
+    const unsubscribe = subscribeAdminVehicles((vehicleList) => {
+      if (vehicleList && vehicleList.length > 0) {
+        setVehicles(
+          vehicleList.map((v) => ({
+            plate: v.plate,
+            type: v.type,
+            capacity: v.capacity,
+            rider: v.rider,
+            status: v.status,
+          }))
+        );
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Real-time Customer Bookings subscription from website (Firestore)
+  useEffect(() => {
+    const unsubscribe = subscribeAdminBookings((bookingList) => {
+      if (bookingList) {
+        const mapped: LocalRequest[] = bookingList.map((b) => ({
+          id: b.id,
+          customer: b.customerName || b.customerPhone || "Customer",
+          from: b.pickupCity || "Colombo",
+          to: b.deliveryCity || "Island-wide",
+          load: b.packageDetails || "General Cargo",
+          vehicle: b.vehicleType || "14ft Lorry",
+          status:
+            b.status === "assigned" || b.status === "in_transit" || b.status === "delivered"
+              ? "a"
+              : b.status === "cancelled"
+              ? "r"
+              : "p",
+        }));
+        setRequests(mapped);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   const pendingCount = requests.filter((r) => r.status === "p").length;
 
-  const handleApproveReject = (id: string, newStatus: "a" | "r") => {
+  const handleApproveReject = async (id: string, newStatus: "a" | "r") => {
     setRequests((prev) =>
       prev.map((r) => (r.id === id ? { ...r, status: newStatus } : r))
     );
-    showToast(newStatus === "a" ? "Request approved" : "Request rejected");
+    await updateBookingDispatch({
+      id,
+      status: newStatus === "a" ? "assigned" : "cancelled",
+    });
+    showToast(newStatus === "a" ? "Request approved & saved in DB" : "Request rejected");
   };
 
   const handleSaveRider = async () => {
@@ -378,19 +440,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         vehicle: "—",
         status: 1,
       };
-      setRiders([newR, ...riders]);
+      setRiders([newR, ...riders.filter((r) => r.id !== cleanRiderId)]);
       setAddRiderModal(false);
       setRiderName("");
       setRiderPhone("");
       setRiderNic("");
       setRiderId("");
-      showToast(`Rider ${cleanRiderId} added! Can log in now.`);
+      showToast(`Rider ${cleanRiderId} saved to database!`);
     } catch {
       showToast("Registration failed. Please try again.");
     }
   };
 
-  const handleSaveVehicle = () => {
+  const handleSaveVehicle = async () => {
     if (!vehPlate.trim()) {
       showToast("Please enter plate number");
       return;
@@ -402,10 +464,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
       rider: vehRider,
       status: "Empty",
     };
-    setVehicles([newV, ...vehicles]);
+    await saveAdminVehicle(newV);
+    setVehicles((prev) => [newV, ...prev.filter((v) => v.plate !== newV.plate)]);
     setAddVehicleModal(false);
     setVehPlate("");
-    showToast(`Vehicle ${newV.plate} added`);
+    showToast(`Vehicle ${newV.plate} saved to database!`);
   };
 
   const getInitials = (name: string) => {

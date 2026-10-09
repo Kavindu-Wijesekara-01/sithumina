@@ -76,8 +76,7 @@ export const LiveMap: React.FC<LiveMapProps> = ({ className = "" }) => {
       id="live-map"
       className={`w-full border border-[var(--line)] rounded-[16px] overflow-hidden bg-[var(--y3)] shadow-xs select-none scroll-mt-24 relative isolate z-0 ${className}`}
     >
-      {/* DESKTOP MAP CARD (≥1024px): 1fr + 260px Lorry List */}
-      <div className="hidden lg:grid grid-cols-[1fr_260px] h-[520px] xl:h-[580px]">
+      <div className="flex flex-col lg:grid lg:grid-cols-[1fr_260px] h-[460px] sm:h-[520px] xl:h-[580px]">
         {/* Map Canvas with overlay controls */}
         <div className="relative w-full h-full overflow-hidden bg-[var(--y3)]">
           <DynamicLeafletMap
@@ -87,30 +86,33 @@ export const LiveMap: React.FC<LiveMapProps> = ({ className = "" }) => {
             userLocation={userLocation}
           />
 
-          {/* Desktop "Live · 24 lorries on the road" Pill */}
+          {/* Live Status Pill */}
           <div
-            className="absolute left-3 top-3 z-[1000] bg-[var(--card)] text-[var(--ink)] rounded-full px-3 py-1.5 text-[12px] font-bold flex items-center gap-2 shadow-md border border-[var(--line)] select-none pointer-events-none"
+            className="absolute left-3 top-3 z-[1000] bg-[var(--card)] text-[var(--ink)] rounded-full px-2.5 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-[12px] font-bold flex items-center gap-1.5 sm:gap-2 shadow-md border border-[var(--line)] select-none pointer-events-none"
             aria-live="polite"
           >
             <i
               className="w-2 h-2 rounded-full bg-[var(--ok)] animate-pu"
               aria-hidden="true"
             />
-            <span>
+            <span className="hidden sm:inline">
               {lorries.length > 0
                 ? `Live · ${lorries.length} ${
                     lorries.length === 1 ? "lorry" : "lorries"
                   } on the road`
                 : "Live · Fleet standby"}
             </span>
+            <span className="sm:hidden">
+              {lorries.length > 0 ? `${lorries.length} live` : "0 live"}
+            </span>
           </div>
 
-          {/* Desktop "My location" GPS Button */}
+          {/* "My location" GPS Button */}
           <button
             type="button"
             onClick={handleGetLocation}
             disabled={gpsLoading}
-            className="absolute right-3 top-3 z-[1000] bg-[var(--y)] text-[#26231B] border-0 rounded-[10px] px-3 py-2 text-[12px] font-extrabold cursor-pointer hover:opacity-90 active:scale-95 transition-all shadow-md flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#26231B]"
+            className="absolute right-3 top-3 z-[1000] bg-[var(--y)] text-[#26231B] border-0 rounded-[10px] px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-[12px] font-extrabold cursor-pointer hover:opacity-90 active:scale-95 transition-all shadow-md flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#26231B]"
             aria-label="Find my current location on map"
           >
             <svg
@@ -125,50 +127,18 @@ export const LiveMap: React.FC<LiveMapProps> = ({ className = "" }) => {
               <circle cx="12" cy="12" r="10" />
               <polygon points="12 2 15 9 22 12 15 15 12 22 9 15 2 12 9 9" />
             </svg>
-            <span>{gpsLoading ? "..." : t.map.gps}</span>
+            <span className="hidden sm:inline">{gpsLoading ? "..." : t.map.gps}</span>
+            <span className="sm:hidden">{gpsLoading ? "..." : t.map.gpsShort}</span>
           </button>
         </div>
 
-        {/* Right side: Nearby Lorries list */}
+        {/* Right side: Nearby Lorries list (Desktop view) */}
         <LorryList
           lorries={nearbyLorries}
           selectedLorryId={selectedLorryId}
           onSelectLorry={selectLorry}
-          className="h-full"
+          className="hidden lg:flex h-full"
         />
-      </div>
-
-      {/* MOBILE MAP CARD (<1024px): Map filling height with GPS button and live pill */}
-      <div className="lg:hidden relative w-full h-[460px] sm:h-[520px] overflow-hidden bg-[var(--y3)]">
-        <DynamicLeafletMap
-          lorries={lorries}
-          selectedLorryId={selectedLorryId}
-          onSelectLorry={selectLorry}
-          userLocation={userLocation}
-        />
-
-        {/* Mobile GPS Button (Top Right) */}
-        <button
-          type="button"
-          onClick={handleGetLocation}
-          disabled={gpsLoading}
-          className="absolute right-3 top-3 z-[1000] bg-[var(--y)] text-[#26231B] border-0 rounded-[10px] px-3 py-1.5 text-[12px] font-extrabold cursor-pointer hover:opacity-90 active:scale-95 transition-all shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[#26231B]"
-          aria-label="Find my location"
-        >
-          {gpsLoading ? "..." : t.map.gpsShort}
-        </button>
-
-        {/* Mobile Live Pill */}
-        <div
-          className="absolute left-3 top-3 z-[1000] bg-[var(--card)] text-[var(--ink)] rounded-full px-2.5 py-1 text-[11px] font-bold flex items-center gap-1.5 shadow-md border border-[var(--line)] select-none pointer-events-none"
-          aria-live="polite"
-        >
-          <i
-            className="w-2 h-2 rounded-full bg-[var(--ok)] animate-pu"
-            aria-hidden="true"
-          />
-          <span>{lorries.length > 0 ? `${lorries.length} live` : "0 live"}</span>
-        </div>
       </div>
     </div>
   );
